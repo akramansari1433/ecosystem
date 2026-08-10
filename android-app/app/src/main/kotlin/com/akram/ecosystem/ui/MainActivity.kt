@@ -116,21 +116,42 @@ fun StatusScreen() {
 
 @Composable
 private fun ClipboardSetupCard() {
+    val context = LocalContext.current
+    var enabled by remember { mutableStateOf(isAccessibilityEnabled(context)) }
+    LifecycleResumeEffect(Unit) {
+        enabled = isAccessibilityEnabled(context)
+        onPauseOrDispose { }
+    }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Sending your clipboard to the Mac", fontWeight = FontWeight.SemiBold)
-            Text(
-                "Samsung only lets the app in focus read the clipboard, so pick " +
-                    "whichever is easiest:\n" +
-                    "•  Add the “Send clipboard to Mac” tile to Quick Settings — " +
-                    "copy, swipe down, tap.\n" +
-                    "•  Select text → Share → “Send to Mac”.\n" +
-                    "•  Or just open this app — it syncs your clipboard automatically.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            if (enabled) {
+                Text("Clipboard sync: automatic ✓", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Copy on either device, paste on the other. Backup options: the " +
+                        "“Send clipboard to Mac” Quick Settings tile, or Share → " +
+                        "“Send to Mac”.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                Text("Phone → Mac clipboard is manual", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Enable the Ecosystem accessibility service to sync automatically " +
+                        "whenever you copy.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Button(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }) { Text("Open Accessibility settings") }
+            }
         }
     }
 }
+
+private fun isAccessibilityEnabled(context: Context): Boolean =
+    Settings.Secure.getString(
+        context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        ?.contains(context.packageName) == true
 
 @Composable
 private fun AcceptDialog(prompt: ConnectionService.PairingUi.AcceptPrompt) {
