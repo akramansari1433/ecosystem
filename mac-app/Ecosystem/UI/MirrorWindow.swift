@@ -7,6 +7,8 @@ private final class MirrorInputView: NSView {
     let videoLayer: AVSampleBufferDisplayLayer
     var onTap: ((CGPoint, Bool) -> Void)?
     var onSwipe: ((CGPoint, CGPoint, Int) -> Void)?
+    var onText: ((String) -> Void)?
+    var onKey: ((String) -> Void)?
 
     private var downPoint: CGPoint?
     private var downTime: Date?
@@ -37,7 +39,41 @@ private final class MirrorInputView: NSView {
         addCursorRect(bounds, cursor: .pointingHand)
     }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Take focus so typing goes to the phone without an extra click.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.window?.makeFirstResponder(self)
+        }
+    }
+
+    /// Mac keyboard → phone. Printable text is typed into the focused field;
+    /// Return/Delete/Escape map to the phone's equivalents.
+    override func keyDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command) {
+            super.keyDown(with: event)   // leave ⌘-shortcuts to the app
+            return
+        }
+        switch event.keyCode {
+        case 36, 76: onKey?("enter")
+        case 51: onKey?("backspace")
+        case 53: onKey?("back")
+        default:
+            guard let text = event.characters, !text.isEmpty,
+                  text.unicodeScalars.allSatisfy({
+                      !CharacterSet.controlCharacters.contains($0)
+                  })
+            else {
+                super.keyDown(with: event)
+                return
+            }
+            onText?(text)
+        }
+    }
+
     override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
         downPoint = normalized(event)
         downTime = Date()
     }
@@ -92,6 +128,8 @@ private struct MirrorSurface: NSViewRepresentable {
         view.onSwipe = { from, to, duration in
             session.swipe(from: from, to: to, durationMs: duration)
         }
+        view.onText = { session.type($0) }
+        view.onKey = { session.pressKey($0) }
         return view
     }
 
@@ -103,14 +141,14 @@ struct MirrorWindow: View {
     let session: MirrorSession
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 0) {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             if session.phase == .streaming {
                 navigationBar
+                    .padding(.vertical, 10)
             }
         }
-        .padding(16)
         .frame(minWidth: 300, minHeight: 480)
         .background(Color(nsColor: .windowBackgroundColor))
         .onDisappear { session.stop() }
@@ -141,8 +179,6 @@ struct MirrorWindow: View {
         case .streaming:
             MirrorSurface(session: session)
                 .aspectRatio(session.videoSize, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .shadow(radius: 8, y: 2)
         case .failed(let reason):
             ContentUnavailableView(
                 "Mirroring failed", systemImage: "exclamationmark.triangle",
@@ -151,14 +187,13 @@ struct MirrorWindow: View {
     }
 
     private var navigationBar: some View {
-        HStack(spacing: 22) {
-            NavButton(icon: "chevron.backward", label: "Back") { session.pressKey("back") }
-            NavButton(icon: "circle", label: "Home") { session.pressKey("home") }
-            NavButton(icon: "square.on.square", label: "Recents") {
-                session.pressKey("recents")
+        HStack(spacing: 26) {
+            NavButton(icon: "chevron.backward", label: "Back (esc)") {
+                session.pressKey("back")
             }
-            NavButton(icon: "bell", label: "Notifications") {
-                session.pressKey("notifications")
+            NavButton(icon: "circle", label: "Home") { session.pressKey("home") }
+            NavButton(icon: "square.on.square", label: "Recent apps") {
+                session.pressKey("recents")
             }
         }
     }

@@ -123,6 +123,10 @@ struct InputKeyPayload: Codable, Equatable {
     let key: String
 }
 
+struct InputTextPayload: Codable, Equatable {
+    let text: String
+}
+
 struct FsTransferResultPayload: Codable, Equatable {
     let message: String?
     let ok: Bool
@@ -162,6 +166,7 @@ enum Message: Equatable {
     case inputTap(InputTapPayload)
     case inputSwipe(InputSwipePayload)
     case inputKey(InputKeyPayload)
+    case inputText(InputTextPayload)
     case authChallenge(AuthChallengePayload)
     case authResponse(AuthResponsePayload)
     case authOK
@@ -200,6 +205,7 @@ enum Message: Equatable {
         case .inputTap: "input.tap"
         case .inputSwipe: "input.swipe"
         case .inputKey: "input.key"
+        case .inputText: "input.text"
         case .authChallenge: "auth.challenge"
         case .authResponse: "auth.response"
         case .authOK: "auth.ok"

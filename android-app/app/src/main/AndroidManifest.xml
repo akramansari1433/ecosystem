@@ -29,6 +29,13 @@
         </activity>
 
         <activity
+            android:name=".ui.WakeActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.ClipboardSendActivity"
             android:label="Send to Mac"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"

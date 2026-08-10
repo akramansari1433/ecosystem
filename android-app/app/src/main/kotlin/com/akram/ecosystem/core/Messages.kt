@@ -148,6 +148,11 @@ data class InputSwipePayload(
 )
 
 @Serializable
+data class InputTextPayload(
+    val text: String,
+)
+
+@Serializable
 data class InputKeyPayload(
     /** "back", "home", "recents", "power", "notifications". */
     val key: String,
@@ -193,6 +198,7 @@ sealed interface Message {
     data class InputTap(val payload: InputTapPayload) : Message
     data class InputSwipe(val payload: InputSwipePayload) : Message
     data class InputKey(val payload: InputKeyPayload) : Message
+    data class InputText(val payload: InputTextPayload) : Message
     data class AuthChallenge(val payload: AuthChallengePayload) : Message
     data class AuthResponse(val payload: AuthResponsePayload) : Message
     data object AuthOK : Message
@@ -231,6 +237,7 @@ sealed interface Message {
             is InputTap -> "input.tap"
             is InputSwipe -> "input.swipe"
             is InputKey -> "input.key"
+            is InputText -> "input.text"
             is AuthChallenge -> "auth.challenge"
             is AuthResponse -> "auth.response"
             AuthOK -> "auth.ok"

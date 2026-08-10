@@ -3,9 +3,14 @@ package com.akram.ecosystem.accessibility
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
+import android.graphics.PixelFormat
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.View
+import android.view.WindowManager
+import android.view.accessibility.AccessibilityNodeInfo
 
 /**
  * Injects touch gestures and navigation actions on behalf of the Mac.
@@ -37,6 +42,16 @@ object RemoteInput {
 
     fun globalAction(key: String): Boolean {
         val service = service ?: return false
+        when (key) {
+            "enter" -> {
+                handler.post { imeEnter(service) }
+                return true
+            }
+            "backspace" -> {
+                handler.post { editFocusedText(service) { it.dropLast(1) } }
+                return true
+            }
+        }
         val action = when (key) {
             "back" -> AccessibilityService.GLOBAL_ACTION_BACK
             "home" -> AccessibilityService.GLOBAL_ACTION_HOME
@@ -45,9 +60,84 @@ object RemoteInput {
             "lock" -> AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN
             else -> return false
         }
-        var performed = false
-        handler.post { performed = service.performGlobalAction(action) }
-        return true.also { Log.i(TAG, "global action $key (queued=$performed)") }
+        handler.post { service.performGlobalAction(action) }
+        Log.i(TAG, "global action $key")
+        return true
+    }
+
+    /** Types [text] into whatever text field currently has focus on the phone. */
+    fun typeText(text: String) {
+        val service = service ?: return
+        handler.post { editFocusedText(service) { it + text } }
+    }
+
+    private fun editFocusedText(
+        service: AccessibilityService,
+        transform: (String) -> String,
+    ) {
+        val node = service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        if (node == null) {
+            Log.w(TAG, "no focused text field")
+            return
+        }
+        val updated = transform(node.text?.toString() ?: "")
+        val args = Bundle().apply {
+            putCharSequence(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, updated)
+        }
+        val ok = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        if (ok) {
+            // Keep the caret at the end so the next keystroke appends.
+            node.performAction(
+                AccessibilityNodeInfo.ACTION_SET_SELECTION,
+                Bundle().apply {
+                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT,
+                        updated.length)
+                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT,
+                        updated.length)
+                })
+        } else {
+            Log.w(TAG, "ACTION_SET_TEXT rejected by the focused field")
+        }
+    }
+
+    private fun imeEnter(service: AccessibilityService) {
+        val node = service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return
+        node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+    }
+
+    // MARK: keep the screen awake while mirroring
+
+    private var keepAwakeView: View? = null
+
+    /**
+     * Android can't capture the screen while the display is physically off, so
+     * an invisible overlay with FLAG_KEEP_SCREEN_ON holds the display awake for
+     * as long as the Mac is mirroring.
+     */
+    fun setKeepAwake(enabled: Boolean) {
+        val service = service ?: return
+        handler.post {
+            val wm = service.getSystemService(WindowManager::class.java)
+            if (enabled) {
+                if (keepAwakeView != null) return@post
+                val view = View(service)
+                val params = WindowManager.LayoutParams(
+                    1, 1,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                    PixelFormat.TRANSPARENT)
+                runCatching { wm.addView(view, params) }
+                    .onSuccess { keepAwakeView = view; Log.i(TAG, "keep-awake on") }
+                    .onFailure { Log.w(TAG, "keep-awake failed: $it") }
+            } else {
+                keepAwakeView?.let { runCatching { wm.removeView(it) } }
+                keepAwakeView = null
+                Log.i(TAG, "keep-awake off")
+            }
+        }
     }
 
     private fun dispatch(path: Path, durationMs: Long) {

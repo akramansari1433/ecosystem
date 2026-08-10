@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="accessibility_description">Lets your Mac send text you copy here,
-        and control this phone while mirroring (taps, swipes, Back/Home/Recents).
-        Ecosystem does not read screen content.</string>
+        and control this phone while mirroring: taps, swipes, Back/Home/Recents, and
+        typing with the Mac keyboard. Ecosystem only reads the text field you are
+        typing into, and never sends screen content anywhere except your paired Mac.</string>
 </resources>

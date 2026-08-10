@@ -344,6 +344,8 @@ class ConnectionService : Service() {
             }
             is Message.InputKey ->
                 com.akram.ecosystem.accessibility.RemoteInput.globalAction(m.payload.key)
+            is Message.InputText ->
+                com.akram.ecosystem.accessibility.RemoteInput.typeText(m.payload.text)
             else -> Log.d(TAG, "ignoring ${m.typeString}")
         }
     }
@@ -746,6 +748,7 @@ class ConnectionService : Service() {
         // Android 14+ allows only ONE capture per consent, so a running session
         // is reused rather than rebuilt — that is what makes mirroring instant
         // on the second and later opens.
+        wakeScreenForMirroring()
         mirrorEncoder?.takeIf { it.isRunning }?.let { encoder ->
             val token = UUID.randomUUID().toString()
             mirrorToken = token
@@ -861,6 +864,22 @@ class ConnectionService : Service() {
         }
     }
 
+    /**
+     * Capture only yields frames while the display is awake (Android gives no
+     * app-level way to record a powered-off screen), so wake it and hold it on
+     * for the session.
+     */
+    private fun wakeScreenForMirroring() {
+        val power = getSystemService(android.os.PowerManager::class.java)
+        if (!power.isInteractive) {
+            runCatching {
+                startActivity(Intent(this, com.akram.ecosystem.ui.WakeActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+        com.akram.ecosystem.accessibility.RemoteInput.setKeepAwake(true)
+    }
+
     /** Detaches the viewer but leaves capture running for an instant re-open. */
     private fun detachMirrorStream() {
         runCatching { mirrorSocket?.close() }
@@ -887,6 +906,7 @@ class ConnectionService : Service() {
 
     private fun stopMirroring() {
         idleMirrorJob?.cancel()
+        com.akram.ecosystem.accessibility.RemoteInput.setKeepAwake(false)
         detachMirrorStream()
         mirrorEncoder?.stop()
         mirrorEncoder = null

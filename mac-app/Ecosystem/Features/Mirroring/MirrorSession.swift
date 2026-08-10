@@ -68,6 +68,12 @@ final class MirrorSession {
         manager.send(.inputKey(.init(key: key)))
     }
 
+    /// Types into whatever field has focus on the phone.
+    func type(_ text: String) {
+        guard phase == .streaming, !text.isEmpty else { return }
+        manager.send(.inputText(.init(text: text)))
+    }
+
     private func run() async {
         do {
             // The phone shows a consent dialog once per session; retry until the
