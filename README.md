@@ -7,10 +7,10 @@ same Wi-Fi network — no cables, no cloud.
 
 | Feature | Status |
 |---|---|
-| Auto-discovery + one-time pairing (TLS, pinned certs) | 🚧 M1 |
-| Clipboard sync (both directions) | 🚧 M1 |
-| Ring my phone | 🚧 M1 |
-| Browse phone files from the Mac | ⏳ M2 |
+| Auto-discovery + one-time pairing (TLS, pinned certs) | ✅ |
+| Clipboard sync (both directions) | ✅ automatic |
+| Ring my phone | ✅ |
+| Browse phone files from the Mac | 🚧 M2 |
 | Screen mirroring in a Mac window | ⏳ M3 |
 | Phone camera as a real system webcam (Zoom/Meet/FaceTime) | ⏳ M4 |
 
