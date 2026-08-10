@@ -68,6 +68,14 @@ final class MirrorSession {
         manager.send(.inputKey(.init(key: key)))
     }
 
+    /// Dims the phone's panel to minimum while you work from the Mac.
+    var phoneDimmed = false {
+        didSet {
+            guard phoneDimmed != oldValue else { return }
+            pressKey(phoneDimmed ? "dim.on" : "dim.off")
+        }
+    }
+
     /// Types into whatever field has focus on the phone.
     func type(_ text: String) {
         guard phase == .streaming, !text.isEmpty else { return }

@@ -78,7 +78,14 @@ class ConnectionService : Service() {
         private const val MIRROR_IDLE_TIMEOUT_MS = 10 * 60 * 1000L
         private const val ACTION_STOP_RING = "com.akram.ecosystem.STOP_RING"
         const val PROTOCOL_VERSION = 2
-        val CAPABILITIES = listOf("clipboard", "ring", "fs", "mirror", "input")
+
+        /** "input" appears only while the accessibility service is actually
+         *  connected, so the Mac can tell the user when control is unavailable. */
+        val capabilities: List<String>
+            get() = buildList {
+                addAll(listOf("clipboard", "ring", "fs", "mirror"))
+                if (com.akram.ecosystem.accessibility.RemoteInput.isAvailable) add("input")
+            }
 
         private val _state = MutableStateFlow(UiState())
         val state: StateFlow<UiState> = _state
@@ -228,7 +235,7 @@ class ConnectionService : Service() {
                 return
             }
             sendMessage(Message.Hello(HelloPayload(
-                capabilities = CAPABILITIES, deviceId = deviceId,
+                capabilities = capabilities, deviceId = deviceId,
                 name = deviceName(), protocolVersion = PROTOCOL_VERSION)))
             _state.value = _state.value.copy(connected = true, peerName = hello.payload.name)
             updateNotification("Connected to ${hello.payload.name}")
@@ -342,8 +349,12 @@ class ConnectionService : Service() {
                     (m.payload.x2 * w).toFloat(), (m.payload.y2 * h).toFloat(),
                     m.payload.durationMs.toLong())
             }
-            is Message.InputKey ->
-                com.akram.ecosystem.accessibility.RemoteInput.globalAction(m.payload.key)
+            is Message.InputKey -> when (m.payload.key) {
+                "dim.on" -> com.akram.ecosystem.accessibility.RemoteInput.setDimmed(true)
+                "dim.off" -> com.akram.ecosystem.accessibility.RemoteInput.setDimmed(false)
+                else ->
+                    com.akram.ecosystem.accessibility.RemoteInput.globalAction(m.payload.key)
+            }
             is Message.InputText ->
                 com.akram.ecosystem.accessibility.RemoteInput.typeText(m.payload.text)
             else -> Log.d(TAG, "ignoring ${m.typeString}")
@@ -799,9 +810,12 @@ class ConnectionService : Service() {
                 .maximumWindowMetrics.bounds
             val scale = payload.maxLongEdge.toFloat() /
                 maxOf(bounds.width(), bounds.height()).toFloat()
-            // Encoder dimensions must be 16-aligned.
-            val w = ((bounds.width() * scale).toInt() / 16) * 16
-            val h = ((bounds.height() * scale).toInt() / 16) * 16
+            // Round to even (H.264 needs even dimensions) rather than flooring to
+            // a multiple of 16 — that distorted the aspect ratio, and Android
+            // letterboxed the mismatch into the frame as black bars.
+            fun even(value: Float) = (Math.round(value / 2f) * 2).coerceAtLeast(2)
+            val w = even(bounds.width() * scale)
+            val h = even(bounds.height() * scale)
             val token = UUID.randomUUID().toString()
             mirrorToken = token
             mirrorWidth = w

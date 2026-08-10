@@ -213,6 +213,7 @@ final class ConnectionManager {
                 return
             }
             appState.phoneName = hello.name
+            appState.inputAvailable = hello.capabilities.contains("input")
             if PairingStore.isPaired {
                 appState.status = .connected(hello.name)   // confirmed once auth.ok lands
             } else {

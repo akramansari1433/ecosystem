@@ -122,23 +122,51 @@ object RemoteInput {
             if (enabled) {
                 if (keepAwakeView != null) return@post
                 val view = View(service)
-                val params = WindowManager.LayoutParams(
-                    1, 1,
-                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
-                    PixelFormat.TRANSPARENT)
-                runCatching { wm.addView(view, params) }
+                runCatching { wm.addView(view, keepAwakeParams(dimmed)) }
                     .onSuccess { keepAwakeView = view; Log.i(TAG, "keep-awake on") }
                     .onFailure { Log.w(TAG, "keep-awake failed: $it") }
             } else {
                 keepAwakeView?.let { runCatching { wm.removeView(it) } }
                 keepAwakeView = null
+                dimmed = false
                 Log.i(TAG, "keep-awake off")
             }
         }
     }
+
+    @Volatile
+    private var dimmed = false
+
+    /**
+     * Drops the panel to minimum brightness during a session. The phone can't be
+     * captured with the display truly off, so "nearly off" is the best Android
+     * allows a normal app; the Mac still receives the full-brightness image.
+     */
+    fun setDimmed(enable: Boolean) {
+        dimmed = enable
+        val service = service ?: return
+        handler.post {
+            val view = keepAwakeView ?: return@post
+            runCatching {
+                service.getSystemService(WindowManager::class.java)
+                    .updateViewLayout(view, keepAwakeParams(enable))
+            }.onFailure { Log.w(TAG, "dim failed: $it") }
+            Log.i(TAG, "dim = $enable")
+        }
+    }
+
+    private fun keepAwakeParams(dim: Boolean) = WindowManager.LayoutParams(
+        1, 1,
+        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+        PixelFormat.TRANSPARENT,
+    ).apply {
+        screenBrightness = if (dim) 0.01f else BRIGHTNESS_OVERRIDE_NONE
+    }
+
+    private const val BRIGHTNESS_OVERRIDE_NONE = -1.0f
 
     private fun dispatch(path: Path, durationMs: Long) {
         val service = service ?: run {

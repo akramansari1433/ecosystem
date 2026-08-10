@@ -176,6 +176,14 @@ struct MirrorWindow: View {
                         Button("Recents", systemImage: "square.on.square") {
                             session.pressKey("recents")
                         }
+                        Button(
+                            "Dim phone",
+                            systemImage: session.phoneDimmed
+                                ? "sun.min.fill" : "sun.max"
+                        ) {
+                            session.phoneDimmed.toggle()
+                        }
+                        .help("Dim the phone's screen while you work here")
                     }
                 }
                 ToolbarItem {
@@ -207,6 +215,17 @@ struct MirrorWindow: View {
             // No aspectRatio modifier: the window itself is locked to the phone's
             // ratio, so the video fills every pixel of the content area.
             MirrorSurface(session: session)
+                .overlay(alignment: .top) {
+                    if !appState.inputAvailable {
+                        Text("Control is off — enable “Ecosystem” in the phone's "
+                             + "Accessibility settings")
+                            .font(.callout)
+                            .padding(8)
+                            .frame(maxWidth: .infinity)
+                            .background(.orange.opacity(0.92))
+                            .foregroundStyle(.black)
+                    }
+                }
         case .failed(let reason):
             ContentUnavailableView(
                 "Mirroring failed", systemImage: "exclamationmark.triangle",
