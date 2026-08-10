@@ -67,7 +67,11 @@ class MainActivity : ComponentActivity() {
         maybeLaunchProjectionConsent(intent)
         setContent {
             MaterialTheme {
-                StatusScreen()
+                StatusScreen(onAllowMirroring = {
+                    val manager = getSystemService(
+                        android.media.projection.MediaProjectionManager::class.java)
+                    requestProjection.launch(manager.createScreenCaptureIntent())
+                })
             }
         }
     }
@@ -102,7 +106,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun StatusScreen() {
+fun StatusScreen(onAllowMirroring: () -> Unit = {}) {
     val state by ConnectionService.state.collectAsState()
 
     Scaffold { innerPadding ->
@@ -125,6 +129,17 @@ fun StatusScreen() {
                         },
                         style = MaterialTheme.typography.bodyLarge
                     )
+                }
+            }
+
+            if (state.mirrorConsentPending) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Your Mac wants to mirror this screen",
+                            fontWeight = FontWeight.SemiBold)
+                        Button(onClick = onAllowMirroring) { Text("Allow mirroring") }
+                    }
                 }
             }
 

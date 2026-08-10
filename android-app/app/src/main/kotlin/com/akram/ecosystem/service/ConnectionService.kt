@@ -72,6 +72,7 @@ class ConnectionService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val RING_CHANNEL_ID = "ecosystem.ring"
         private const val RING_NOTIFICATION_ID = 2
+        private const val CONSENT_NOTIFICATION_ID = 3
         private const val ACTION_STOP_RING = "com.akram.ecosystem.STOP_RING"
         const val PROTOCOL_VERSION = 1
         val CAPABILITIES = listOf("clipboard", "ring", "fs", "mirror")
@@ -608,13 +609,20 @@ class ConnectionService : Service() {
     private var mirrorSocket: SSLSocket? = null
     private val mirrorWriteLock = Any()
 
+    @Volatile
+    private var consentPromptShown = false
+
     fun setProjectionGrant(resultCode: Int, data: Intent) {
         projectionGrant = resultCode to data
+        consentPromptShown = false
+        getSystemService(NotificationManager::class.java).cancel(CONSENT_NOTIFICATION_ID)
         _state.value = _state.value.copy(mirrorConsentPending = false)
         Log.i(TAG, "projection consent granted")
     }
 
     fun consentDenied() {
+        consentPromptShown = false
+        getSystemService(NotificationManager::class.java).cancel(CONSENT_NOTIFICATION_ID)
         _state.value = _state.value.copy(mirrorConsentPending = false)
     }
 
@@ -625,15 +633,22 @@ class ConnectionService : Service() {
         val grant = projectionGrant
         if (grant == null) {
             _state.value = _state.value.copy(mirrorConsentPending = true)
-            showConsentNotification()
-            runCatching {
-                startActivity(Intent(this, com.akram.ecosystem.ui.MainActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    .putExtra("requestProjection", true))
+            // The Mac polls every 2 s while waiting; prompt the user only once.
+            if (!consentPromptShown) {
+                consentPromptShown = true
+                showConsentNotification()
+                runCatching {
+                    startActivity(
+                        Intent(this, com.akram.ecosystem.ui.MainActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            .putExtra("requestProjection", true))
+                }
             }
             sendMessage(Message.MirrorNeedsConsent, replyTo = requestId)
             return
         }
+        consentPromptShown = false
         projectionGrant = null // grants are single-use
         stopMirroring()
         try {
@@ -740,10 +755,10 @@ class ConnectionService : Service() {
         val open = PendingIntent.getActivity(
             this, 2,
             Intent(this, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 .putExtra("requestProjection", true),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        nm.notify(3, Notification.Builder(this, "ecosystem.consent")
+        nm.notify(CONSENT_NOTIFICATION_ID, Notification.Builder(this, "ecosystem.consent")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle("Allow screen mirroring?")
             .setContentText("Your Mac wants to view this phone's screen. Tap to allow.")
