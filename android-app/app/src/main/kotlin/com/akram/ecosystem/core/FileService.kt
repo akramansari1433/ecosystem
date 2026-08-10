@@ -32,6 +32,7 @@ class FileService(private val root: File) {
 
     fun list(path: String): List<FsEntry> =
         (resolve(path).listFiles() ?: emptyArray())
+            .filterNot { it.name.startsWith(".") }
             .sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
             .map {
                 FsEntry(

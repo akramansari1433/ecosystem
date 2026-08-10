@@ -99,6 +99,27 @@ data class FsThumbDataPayload(
 )
 
 @Serializable
+data class MirrorStartPayload(
+    val bitrateBps: Int,
+    val maxLongEdge: Int,
+)
+
+@Serializable
+data class MirrorStartedPayload(
+    val height: Int,
+    val rotationDeg: Int,
+    val token: String,
+    val width: Int,
+)
+
+@Serializable
+data class MirrorRotatedPayload(
+    val height: Int,
+    val rotationDeg: Int,
+    val width: Int,
+)
+
+@Serializable
 data class FsTransferResultPayload(
     val message: String? = null,
     val ok: Boolean,
@@ -130,6 +151,11 @@ sealed interface Message {
     data class FsTransferResult(val payload: FsTransferResultPayload) : Message
     data class FsThumb(val payload: FsThumbPayload) : Message
     data class FsThumbData(val payload: FsThumbDataPayload) : Message
+    data class MirrorStart(val payload: MirrorStartPayload) : Message
+    data object MirrorNeedsConsent : Message
+    data class MirrorStarted(val payload: MirrorStartedPayload) : Message
+    data object MirrorStop : Message
+    data class MirrorRotated(val payload: MirrorRotatedPayload) : Message
     data class Unknown(val type: String) : Message
 
     val typeString: String
@@ -157,6 +183,11 @@ sealed interface Message {
             is FsTransferResult -> "fs.transferResult"
             is FsThumb -> "fs.thumb"
             is FsThumbData -> "fs.thumbData"
+            is MirrorStart -> "mirror.start"
+            MirrorNeedsConsent -> "mirror.needsConsent"
+            is MirrorStarted -> "mirror.started"
+            MirrorStop -> "mirror.stop"
+            is MirrorRotated -> "mirror.rotated"
             is Unknown -> type
         }
 }

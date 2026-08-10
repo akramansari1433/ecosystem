@@ -46,6 +46,16 @@ class MainActivity : ComponentActivity() {
     private val requestNotifications =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    private val requestProjection =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val service = ConnectionService.instance
+            if (result.resultCode == RESULT_OK && result.data != null) {
+                service?.setProjectionGrant(result.resultCode, result.data!!)
+            } else {
+                service?.consentDenied()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
@@ -54,10 +64,24 @@ class MainActivity : ComponentActivity() {
             requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         ConnectionService.start(this)
+        maybeLaunchProjectionConsent(intent)
         setContent {
             MaterialTheme {
                 StatusScreen()
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        maybeLaunchProjectionConsent(intent)
+    }
+
+    private fun maybeLaunchProjectionConsent(intent: Intent?) {
+        if (intent?.getBooleanExtra("requestProjection", false) == true) {
+            val manager = getSystemService(
+                android.media.projection.MediaProjectionManager::class.java)
+            requestProjection.launch(manager.createScreenCaptureIntent())
         }
     }
 

@@ -63,6 +63,7 @@ class ConnectionService : Service() {
         val connected: Boolean = false,
         val peerName: String? = null,
         val pairing: PairingUi? = null,
+        val mirrorConsentPending: Boolean = false,
     )
 
     companion object {
@@ -73,7 +74,7 @@ class ConnectionService : Service() {
         private const val RING_NOTIFICATION_ID = 2
         private const val ACTION_STOP_RING = "com.akram.ecosystem.STOP_RING"
         const val PROTOCOL_VERSION = 1
-        val CAPABILITIES = listOf("clipboard", "ring", "fs")
+        val CAPABILITIES = listOf("clipboard", "ring", "fs", "mirror")
 
         private val _state = MutableStateFlow(UiState())
         val state: StateFlow<UiState> = _state
@@ -279,6 +280,8 @@ class ConnectionService : Service() {
             is Message.FsUpload -> handleFsUpload(envelope.id, m.payload)
             is Message.FsTransferResult ->
                 Log.i(TAG, "transfer ${m.payload.token}: ok=${m.payload.ok}")
+            is Message.MirrorStart -> handleMirrorStart(envelope.id, m.payload)
+            Message.MirrorStop -> stopMirroring()
             else -> Log.d(TAG, "ignoring ${m.typeString}")
         }
     }
@@ -393,12 +396,18 @@ class ConnectionService : Service() {
             }
     }
 
-    /** Runs a file stream connection (download: we send; upload: we receive). */
+    /** Routes an attached stream connection by kind (file transfer / mirror). */
     private fun runStream(socket: SSLSocket, reader: FrameReader, attach: StreamAttachPayload) {
         try {
-            when {
-                attach.kind != "file" -> Log.w(TAG, "unsupported stream kind ${attach.kind}")
-                else -> {
+            when (attach.kind) {
+                "mirror" -> {
+                    if (attach.token == mirrorToken) {
+                        runMirrorStream(socket)
+                    } else {
+                        Log.w(TAG, "unknown mirror token")
+                    }
+                }
+                "file" -> {
                     fileService.takeDownload(attach.token)?.let { file ->
                         streamFileOut(socket, file)
                         return
@@ -409,6 +418,7 @@ class ConnectionService : Service() {
                     }
                     Log.w(TAG, "unknown stream token")
                 }
+                else -> Log.w(TAG, "unsupported stream kind ${attach.kind}")
             }
         } catch (t: Throwable) {
             Log.w(TAG, "stream ended with error: $t")
@@ -584,6 +594,162 @@ class ConnectionService : Service() {
                 .setOngoing(true)
                 .addAction(Notification.Action.Builder(null, "Stop", stop).build())
                 .build())
+    }
+
+    // MARK: mirroring
+
+    /** One-shot consent grant handed over by MainActivity. */
+    @Volatile
+    private var projectionGrant: Pair<Int, Intent>? = null
+    private var mirrorEncoder: com.akram.ecosystem.features.MirrorEncoder? = null
+    private var mirrorToken: String? = null
+    private var pendingMirrorFrames = ArrayDeque<Triple<Int, Long, ByteArray>>()
+    @Volatile
+    private var mirrorSocket: SSLSocket? = null
+    private val mirrorWriteLock = Any()
+
+    fun setProjectionGrant(resultCode: Int, data: Intent) {
+        projectionGrant = resultCode to data
+        _state.value = _state.value.copy(mirrorConsentPending = false)
+        Log.i(TAG, "projection consent granted")
+    }
+
+    fun consentDenied() {
+        _state.value = _state.value.copy(mirrorConsentPending = false)
+    }
+
+    private fun handleMirrorStart(
+        requestId: String,
+        payload: com.akram.ecosystem.core.MirrorStartPayload,
+    ) {
+        val grant = projectionGrant
+        if (grant == null) {
+            _state.value = _state.value.copy(mirrorConsentPending = true)
+            showConsentNotification()
+            runCatching {
+                startActivity(Intent(this, com.akram.ecosystem.ui.MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra("requestProjection", true))
+            }
+            sendMessage(Message.MirrorNeedsConsent, replyTo = requestId)
+            return
+        }
+        projectionGrant = null // grants are single-use
+        stopMirroring()
+        try {
+            // API 34+: the service must be foregrounded with the mediaProjection
+            // type BEFORE getMediaProjection, and a callback registered before
+            // createVirtualDisplay.
+            startForeground(
+                NOTIFICATION_ID, buildNotification("Mirroring to your Mac"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            val manager = getSystemService(
+                android.media.projection.MediaProjectionManager::class.java)
+            val projection = manager.getMediaProjection(grant.first, grant.second)
+                ?: throw IllegalStateException("projection unavailable")
+            projection.registerCallback(object :
+                android.media.projection.MediaProjection.Callback() {
+                override fun onStop() {
+                    stopMirroring()
+                }
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
+
+            val bounds = getSystemService(android.view.WindowManager::class.java)
+                .maximumWindowMetrics.bounds
+            val scale = payload.maxLongEdge.toFloat() /
+                maxOf(bounds.width(), bounds.height()).toFloat()
+            // Encoder dimensions must be 16-aligned.
+            val w = ((bounds.width() * scale).toInt() / 16) * 16
+            val h = ((bounds.height() * scale).toInt() / 16) * 16
+            val token = UUID.randomUUID().toString()
+            mirrorToken = token
+            pendingMirrorFrames.clear()
+            mirrorEncoder = com.akram.ecosystem.features.MirrorEncoder(
+                projection, w, h, payload.bitrateBps,
+                resources.displayMetrics.densityDpi,
+                sink = { type, pts, data -> emitMirrorFrame(type, pts, data) })
+            mirrorEncoder?.start()
+            sendMessage(Message.MirrorStarted(
+                com.akram.ecosystem.core.MirrorStartedPayload(
+                    height = h, rotationDeg = 0, token = token, width = w)),
+                replyTo = requestId)
+        } catch (t: Throwable) {
+            Log.e(TAG, "mirror start failed", t)
+            stopMirroring()
+            sendMessage(Message.Error(ErrorPayload("mirror_error", t.message)),
+                replyTo = requestId)
+        }
+    }
+
+    /** Encoder frames: buffer until the Mac's stream socket attaches, then write. */
+    private fun emitMirrorFrame(type: Int, pts: Long, data: ByteArray) {
+        val socket = mirrorSocket
+        if (socket == null) {
+            synchronized(pendingMirrorFrames) {
+                // Keep only the newest config + latest frames while waiting.
+                if (pendingMirrorFrames.size > 120) pendingMirrorFrames.clear()
+                pendingMirrorFrames += Triple(type, pts, data)
+            }
+            return
+        }
+        try {
+            synchronized(mirrorWriteLock) {
+                socket.outputStream.write(BinaryFrames.encode(type, pts, data))
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "mirror socket write failed: $t")
+            stopMirroring()
+        }
+    }
+
+    private fun runMirrorStream(socket: SSLSocket) {
+        Log.i(TAG, "mirror stream attached")
+        synchronized(pendingMirrorFrames) {
+            for ((type, pts, data) in pendingMirrorFrames) {
+                runCatching {
+                    socket.outputStream.write(BinaryFrames.encode(type, pts, data))
+                }
+            }
+            pendingMirrorFrames.clear()
+            mirrorSocket = socket
+        }
+        // Block until the Mac closes the stream (its way of ending the session).
+        runCatching { while (socket.inputStream.read() >= 0) Unit }
+        mirrorSocket = null
+        stopMirroring()
+    }
+
+    private fun stopMirroring() {
+        mirrorEncoder?.stop()
+        mirrorEncoder = null
+        mirrorToken = null
+        runCatching { mirrorSocket?.close() }
+        mirrorSocket = null
+        startForeground(
+            NOTIFICATION_ID,
+            buildNotification(_state.value.peerName?.let { "Connected to $it" }
+                ?: "Waiting for your Mac…"),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+    }
+
+    private fun showConsentNotification() {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(
+            "ecosystem.consent", "Mirroring requests", NotificationManager.IMPORTANCE_HIGH))
+        val open = PendingIntent.getActivity(
+            this, 2,
+            Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra("requestProjection", true),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        nm.notify(3, Notification.Builder(this, "ecosystem.consent")
+            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .setContentTitle("Allow screen mirroring?")
+            .setContentText("Your Mac wants to view this phone's screen. Tap to allow.")
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build())
     }
 
     // MARK: outbound

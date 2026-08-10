@@ -30,6 +30,11 @@ struct MenuContent: View {
                     openWindow(id: "phone-files")
                     NSApp.activate(ignoringOtherApps: true)
                 }
+                Button("Mirror phone screen…") {
+                    openWindow(id: "phone-mirror")
+                    NSApp.activate(ignoringOtherApps: true)
+                    manager.mirror.start()
+                }
             }
 
             Divider()

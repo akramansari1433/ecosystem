@@ -126,6 +126,40 @@ actor StreamConnection {
         }
     }
 
+    /// Attaches to a live video stream and yields decoded binary frames until
+    /// the peer closes or the consumer cancels.
+    func frames(token: String, kind: String) -> AsyncThrowingStream<BinaryFrame, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    try await start()
+                    try await send(try ProtocolCodec.encodeFrame(
+                        id: UUID().uuidString.lowercased(),
+                        message: .streamAttach(.init(kind: kind, token: token))))
+                    let reader = BinaryFrameReader()
+                    while !Task.isCancelled {
+                        guard let data = try await receive() else { break }
+                        for frame in try reader.append(data) {
+                            continuation.yield(frame)
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+                connection.cancel()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+                Task { await self.closeStream() }
+            }
+        }
+    }
+
+    func closeStream() {
+        connection.cancel()
+    }
+
     /// Streams the local file [source] to the phone.
     func upload(
         token: String, from source: URL,

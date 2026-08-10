@@ -13,16 +13,19 @@
 		030AC2D7061F45B7BF960BE5 /* FileBrowserModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DAE884B9D12090ED543EE6D /* FileBrowserModel.swift */; };
 		0BC4B4AB69A107B84CD901CC /* FrameReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CF5F43399FCC116148D667 /* FrameReader.swift */; };
 		0DC24AC80033BFEC2452280D /* DeviceBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149B418FD7D5021324F0B77A /* DeviceBrowser.swift */; };
+		11A0D8EDBE5CB893349D39BF /* H264Assembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01C9702A34C121B7AA70421 /* H264Assembler.swift */; };
 		2292B4EDC9F6D39058FF944C /* StreamConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */; };
 		3ABC86EB39404ACC14CCB4BB /* ClipboardSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BB3230DAE77ACE2C1F815C /* ClipboardSync.swift */; };
 		472EEEB6FD9298D0887404CA /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003CE1F6634354A0762DDD21 /* AppState.swift */; };
 		547D6FCAB699B4F26D4A6930 /* ProtocolCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB4392E8CF7B22E8AEF48CBD /* ProtocolCodecTests.swift */; };
+		598657EB28FC92DBB8022B4C /* MirrorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C5509329948F276C59FB9F /* MirrorSession.swift */; };
 		59AF1500E6048D0AEFAA8C1D /* X509 in Frameworks */ = {isa = PBXBuildFile; productRef = 7F3F3E4FB094787EAC4672A3 /* X509 */; };
 		83E657C190655288EABE6A26 /* BinaryFramesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785ED431DE6E4B40980418A1 /* BinaryFramesTests.swift */; };
 		85BAF2A7EA79BCA1FD10F76B /* ConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC65AADAEA421ABDBB56F40D /* ConnectionManager.swift */; };
 		8E4840E94FB4C22A09E61F13 /* IdentityStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23B6D0C5FE83238CD54075C5 /* IdentityStoreTests.swift */; };
 		99FB15E12A450DFF0BA27FC6 /* Identity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C90C4DDE6E434D78F959671 /* Identity.swift */; };
 		9E3EB6473A55FFDB3FDB0868 /* PairingCodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD47517E3BFBECCB89FFB7EA /* PairingCodeTests.swift */; };
+		A25373137800201449090B82 /* MirrorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */; };
 		A85689BE85659933A8F79C1B /* EcosystemApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F97B7789670B31B8A473C61 /* EcosystemApp.swift */; };
 		B8FF7FF56456EF460A2B6B36 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3A4DA73670F8B5D2839D0B /* FileBrowserView.swift */; };
 		C48194E7AB7A02E82FD29388 /* PairingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEFCBBACFFCC5E8341B2614 /* PairingEngine.swift */; };
@@ -54,12 +57,14 @@
 		4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamConnection.swift; sourceTree = "<group>"; };
 		4F97B7789670B31B8A473C61 /* EcosystemApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EcosystemApp.swift; sourceTree = "<group>"; };
 		5C90C4DDE6E434D78F959671 /* Identity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identity.swift; sourceTree = "<group>"; };
+		6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorWindow.swift; sourceTree = "<group>"; };
 		65016B6F0072803375AD145C /* FrameReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameReaderTests.swift; sourceTree = "<group>"; };
 		785ED431DE6E4B40980418A1 /* BinaryFramesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryFramesTests.swift; sourceTree = "<group>"; };
 		8D8476E3FCD298F8F74CB553 /* EcosystemTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EcosystemTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		93F6D2166A6D3B4BA1BA4C14 /* PlaceholderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderTests.swift; sourceTree = "<group>"; };
 		94CD0BD69396AC6E5A07D21F /* PairingCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCode.swift; sourceTree = "<group>"; };
 		9DAE884B9D12090ED543EE6D /* FileBrowserModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserModel.swift; sourceTree = "<group>"; };
+		A01C9702A34C121B7AA70421 /* H264Assembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H264Assembler.swift; sourceTree = "<group>"; };
 		A60F7109FE591E7B23DDC88D /* ControlConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlConnection.swift; sourceTree = "<group>"; };
 		A76DA50DBCAA9E450A57EB60 /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
 		AC65AADAEA421ABDBB56F40D /* ConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionManager.swift; sourceTree = "<group>"; };
@@ -69,6 +74,7 @@
 		CB3A4DA73670F8B5D2839D0B /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
 		CB4392E8CF7B22E8AEF48CBD /* ProtocolCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolCodecTests.swift; sourceTree = "<group>"; };
 		CD47517E3BFBECCB89FFB7EA /* PairingCodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCodeTests.swift; sourceTree = "<group>"; };
+		D1C5509329948F276C59FB9F /* MirrorSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorSession.swift; sourceTree = "<group>"; };
 		E4AA591F1984F9E8B603F527 /* Ecosystem.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ecosystem.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F04E1941B706ADDDE5DC146E /* BinaryFrames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryFrames.swift; sourceTree = "<group>"; };
 		F090A46118396020E3CD41FD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -100,8 +106,18 @@
 				B4BB3230DAE77ACE2C1F815C /* ClipboardSync.swift */,
 				4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */,
 				030488436DC9A7FFFDB23551 /* FileBrowser */,
+				1796578CCCBB33AE96161D6C /* Mirroring */,
 			);
 			path = Features;
+			sourceTree = "<group>";
+		};
+		1796578CCCBB33AE96161D6C /* Mirroring */ = {
+			isa = PBXGroup;
+			children = (
+				A01C9702A34C121B7AA70421 /* H264Assembler.swift */,
+				D1C5509329948F276C59FB9F /* MirrorSession.swift */,
+			);
+			path = Mirroring;
 			sourceTree = "<group>";
 		};
 		28FED88F042C8E56D23CD239 /* UI */ = {
@@ -109,6 +125,7 @@
 			children = (
 				CB3A4DA73670F8B5D2839D0B /* FileBrowserView.swift */,
 				264E91AA7C2D9DDB60797974 /* MenuContent.swift */,
+				6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -270,9 +287,12 @@
 				030AC2D7061F45B7BF960BE5 /* FileBrowserModel.swift in Sources */,
 				B8FF7FF56456EF460A2B6B36 /* FileBrowserView.swift in Sources */,
 				0BC4B4AB69A107B84CD901CC /* FrameReader.swift in Sources */,
+				11A0D8EDBE5CB893349D39BF /* H264Assembler.swift in Sources */,
 				99FB15E12A450DFF0BA27FC6 /* Identity.swift in Sources */,
 				F22EB9E21BB925A6858F3B7B /* MenuContent.swift in Sources */,
 				01CEE3F51B1892D9FF6270CC /* Messages.swift in Sources */,
+				598657EB28FC92DBB8022B4C /* MirrorSession.swift in Sources */,
+				A25373137800201449090B82 /* MirrorWindow.swift in Sources */,
 				E2D2780193FF0DD8FF8573A5 /* PairingCode.swift in Sources */,
 				C48194E7AB7A02E82FD29388 /* PairingEngine.swift in Sources */,
 				006083E3279B7BA8A48EE736 /* ProtocolCodec.swift in Sources */,

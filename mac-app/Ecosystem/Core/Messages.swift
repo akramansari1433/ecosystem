@@ -79,6 +79,24 @@ struct FsThumbDataPayload: Codable, Equatable {
     let dataBase64: String?
 }
 
+struct MirrorStartPayload: Codable, Equatable {
+    let bitrateBps: Int
+    let maxLongEdge: Int
+}
+
+struct MirrorStartedPayload: Codable, Equatable {
+    let height: Int
+    let rotationDeg: Int
+    let token: String
+    let width: Int
+}
+
+struct MirrorRotatedPayload: Codable, Equatable {
+    let height: Int
+    let rotationDeg: Int
+    let width: Int
+}
+
 struct FsTransferResultPayload: Codable, Equatable {
     let message: String?
     let ok: Bool
@@ -110,6 +128,11 @@ enum Message: Equatable {
     case fsTransferResult(FsTransferResultPayload)
     case fsThumb(FsThumbPayload)
     case fsThumbData(FsThumbDataPayload)
+    case mirrorStart(MirrorStartPayload)
+    case mirrorNeedsConsent
+    case mirrorStarted(MirrorStartedPayload)
+    case mirrorStop
+    case mirrorRotated(MirrorRotatedPayload)
     case unknown(String)
 
     var typeString: String {
@@ -137,6 +160,11 @@ enum Message: Equatable {
         case .fsTransferResult: "fs.transferResult"
         case .fsThumb: "fs.thumb"
         case .fsThumbData: "fs.thumbData"
+        case .mirrorStart: "mirror.start"
+        case .mirrorNeedsConsent: "mirror.needsConsent"
+        case .mirrorStarted: "mirror.started"
+        case .mirrorStop: "mirror.stop"
+        case .mirrorRotated: "mirror.rotated"
         case .unknown(let type): type
         }
     }

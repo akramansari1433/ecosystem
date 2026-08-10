@@ -24,6 +24,7 @@ final class ConnectionManager {
     private let clipboard = ClipboardSync()
     private var pendingReplies: [String: CheckedContinuation<InboundEnvelope, Error>] = [:]
     private(set) lazy var files = FileBrowserModel(manager: self)
+    private(set) lazy var mirror = MirrorSession(manager: self)
 
     enum RequestError: Error {
         case notConnected

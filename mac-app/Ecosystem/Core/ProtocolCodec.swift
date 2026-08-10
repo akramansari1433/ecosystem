@@ -58,8 +58,12 @@ enum ProtocolCodec {
         case .fsTransferResult(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsThumb(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsThumbData(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .mirrorStart(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .mirrorStarted(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .mirrorRotated(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .ping, .pong, .pairAccept, .pairReject, .pairConfirm,
-             .ringStart, .ringStop, .ringStopped, .unknown:
+             .ringStart, .ringStop, .ringStopped, .unknown,
+             .mirrorNeedsConsent, .mirrorStop:
             body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString,
                                   payload: nil as NoPayload?)
         }
@@ -116,6 +120,11 @@ enum ProtocolCodec {
         case "fs.transferResult": message = .fsTransferResult(try payload(from: data, type: header.type))
         case "fs.thumb": message = .fsThumb(try payload(from: data, type: header.type))
         case "fs.thumbData": message = .fsThumbData(try payload(from: data, type: header.type))
+        case "mirror.start": message = .mirrorStart(try payload(from: data, type: header.type))
+        case "mirror.needsConsent": message = .mirrorNeedsConsent
+        case "mirror.started": message = .mirrorStarted(try payload(from: data, type: header.type))
+        case "mirror.stop": message = .mirrorStop
+        case "mirror.rotated": message = .mirrorRotated(try payload(from: data, type: header.type))
         default: message = .unknown(header.type)
         }
         return InboundEnvelope(id: header.id, replyTo: header.replyTo, message: message)
