@@ -1,0 +1,81 @@
+package com.akram.ecosystem.core
+
+import java.nio.ByteBuffer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
+
+data class InboundEnvelope(
+    val id: String,
+    val replyTo: String?,
+    val message: Message,
+)
+
+object ProtocolCodec {
+    class MissingPayloadException(type: String) :
+        Exception("message type '$type' requires a payload")
+
+    // Canonical form per docs/protocol.md §3: compact, no explicit nulls;
+    // key order comes from alphabetical field declaration in the data classes.
+    private val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
+
+    @Serializable
+    private data class RawEnvelope(
+        val id: String,
+        val payload: JsonElement? = null,
+        val replyTo: String? = null,
+        val type: String,
+    )
+
+    /** Encodes a complete wire frame: 4-byte BE length prefix + canonical JSON. */
+    fun encodeFrame(id: String, message: Message, replyTo: String? = null): ByteArray {
+        val payload: JsonElement? = when (message) {
+            is Message.Hello -> json.encodeToJsonElement(message.payload)
+            is Message.Error -> json.encodeToJsonElement(message.payload)
+            is Message.PairRequest -> json.encodeToJsonElement(message.payload)
+            is Message.PairAbort -> json.encodeToJsonElement(message.payload)
+            is Message.ClipboardSet -> json.encodeToJsonElement(message.payload)
+            is Message.StreamAttach -> json.encodeToJsonElement(message.payload)
+            else -> null
+        }
+        val body = json.encodeToString(
+            RawEnvelope.serializer(),
+            RawEnvelope(id = id, payload = payload, replyTo = replyTo, type = message.typeString),
+        ).toByteArray(Charsets.UTF_8)
+        return ByteBuffer.allocate(4 + body.size).putInt(body.size).put(body).array()
+    }
+
+    /** Decodes one JSON frame payload (without the length prefix). */
+    fun decodeFrame(bytes: ByteArray): InboundEnvelope {
+        val raw = json.decodeFromString(
+            RawEnvelope.serializer(), bytes.toString(Charsets.UTF_8))
+        val message = when (raw.type) {
+            "hello" -> Message.Hello(payload(raw))
+            "ping" -> Message.Ping
+            "pong" -> Message.Pong
+            "error" -> Message.Error(payload(raw))
+            "pair.request" -> Message.PairRequest(payload(raw))
+            "pair.accept" -> Message.PairAccept
+            "pair.reject" -> Message.PairReject
+            "pair.confirm" -> Message.PairConfirm
+            "pair.abort" -> Message.PairAbort(payload(raw))
+            "clipboard.set" -> Message.ClipboardSet(payload(raw))
+            "ring.start" -> Message.RingStart
+            "ring.stop" -> Message.RingStop
+            "ring.stopped" -> Message.RingStopped
+            "stream.attach" -> Message.StreamAttach(payload(raw))
+            else -> Message.Unknown(raw.type)
+        }
+        return InboundEnvelope(id = raw.id, replyTo = raw.replyTo, message = message)
+    }
+
+    private inline fun <reified P> payload(raw: RawEnvelope): P {
+        val element = raw.payload ?: throw MissingPayloadException(raw.type)
+        return json.decodeFromJsonElement<P>(element)
+    }
+}
