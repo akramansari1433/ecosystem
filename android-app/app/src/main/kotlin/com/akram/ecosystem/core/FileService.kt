@@ -41,6 +41,43 @@ class FileService(private val root: File) {
                     size = if (it.isDirectory) 0 else it.length())
             }
 
+    /**
+     * Recursively collects files whose extension matches [extensions], reporting
+     * each one's path relative to [path]. Skips hidden folders and app-private
+     * Android/data & Android/obb (huge, unreadable, and never interesting).
+     */
+    fun search(
+        path: String,
+        extensions: Set<String>,
+        maxDepth: Int = 8,
+        maxResults: Int = 4000,
+    ): List<FsEntry> {
+        val base = resolve(path)
+        val results = mutableListOf<FsEntry>()
+        fun walk(dir: File, depth: Int, prefix: String) {
+            if (depth > maxDepth || results.size >= maxResults) return
+            val children = dir.listFiles() ?: return
+            for (child in children) {
+                if (results.size >= maxResults) return
+                if (child.name.startsWith(".")) continue
+                val rel = if (prefix.isEmpty()) child.name else "$prefix/${child.name}"
+                if (child.isDirectory) {
+                    if (rel == "Android/data" || rel == "Android/obb") continue
+                    walk(child, depth + 1, rel)
+                } else if (child.extension.lowercase() in extensions) {
+                    results += FsEntry(
+                        isDir = false,
+                        mtimeMillis = child.lastModified(),
+                        name = child.name,
+                        relPath = rel,
+                        size = child.length())
+                }
+            }
+        }
+        walk(base, 0, "")
+        return results.sortedByDescending { it.mtimeMillis }
+    }
+
     fun prepareDownload(path: String): DownloadReady {
         val file = resolve(path)
         val token = UUID.randomUUID().toString()

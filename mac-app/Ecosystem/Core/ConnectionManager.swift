@@ -132,8 +132,8 @@ final class ConnectionManager {
         }
     }
 
-    /// Sends a request and awaits the correlated reply (15 s timeout).
-    func request(_ message: Message) async throws -> InboundEnvelope {
+    /// Sends a request and awaits the correlated reply.
+    func request(_ message: Message, timeout: Double = 15) async throws -> InboundEnvelope {
         guard let connection else { throw RequestError.notConnected }
         let id = UUID().uuidString.lowercased()
         let reply: InboundEnvelope = try await withCheckedThrowingContinuation { cont in
@@ -147,7 +147,7 @@ final class ConnectionManager {
                 }
             }
             Task {
-                try? await Task.sleep(for: .seconds(15))
+                try? await Task.sleep(for: .seconds(timeout))
                 self.pendingReplies.removeValue(forKey: id)?
                     .resume(throwing: RequestError.timeout)
             }

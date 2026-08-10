@@ -272,6 +272,7 @@ class ConnectionService : Service() {
             Message.RingStart -> startRinging()
             Message.RingStop -> stopRinging(notifyMac = false)
             is Message.FsList -> handleFsList(envelope.id, m.payload.path)
+            is Message.FsSearch -> handleFsSearch(envelope.id, m.payload)
             is Message.FsThumb -> handleFsThumb(envelope.id, m.payload)
             is Message.FsDownload -> handleFsDownload(envelope.id, m.payload.path)
             is Message.FsUpload -> handleFsUpload(envelope.id, m.payload)
@@ -306,6 +307,34 @@ class ConnectionService : Service() {
     }
 
     private val videoExtensions = setOf("mp4", "mkv", "mov", "webm", "3gp", "avi")
+    private val imageExtensions =
+        setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "dng")
+
+    private fun handleFsSearch(
+        requestId: String,
+        payload: com.akram.ecosystem.core.FsSearchPayload,
+    ) {
+        if (!storageGranted()) {
+            sendMessage(Message.Error(ErrorPayload("storage_permission",
+                "Grant 'All files access' in the Ecosystem app")), replyTo = requestId)
+            return
+        }
+        scope.launch {
+            val extensions = buildSet {
+                if ("image" in payload.kinds) addAll(imageExtensions)
+                if ("video" in payload.kinds) addAll(videoExtensions)
+            }
+            runCatching { fileService.search(payload.path, extensions, payload.maxDepth) }
+                .onSuccess {
+                    Log.i(TAG, "search ${payload.path} ${payload.kinds} -> ${it.size} files")
+                    sendMessage(Message.FsEntries(FsEntriesPayload(it)), replyTo = requestId)
+                }
+                .onFailure {
+                    sendMessage(Message.Error(ErrorPayload("fs_error", it.message)),
+                        replyTo = requestId)
+                }
+        }
+    }
 
     private fun handleFsThumb(requestId: String, payload: com.akram.ecosystem.core.FsThumbPayload) {
         scope.launch {

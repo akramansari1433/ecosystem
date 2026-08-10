@@ -50,6 +50,7 @@ enum ProtocolCodec {
         case .clipboardSet(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .streamAttach(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsList(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .fsSearch(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsEntries(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsDownload(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsUpload(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
@@ -107,6 +108,7 @@ enum ProtocolCodec {
         case "ring.stopped": message = .ringStopped
         case "stream.attach": message = .streamAttach(try payload(from: data, type: header.type))
         case "fs.list": message = .fsList(try payload(from: data, type: header.type))
+        case "fs.search": message = .fsSearch(try payload(from: data, type: header.type))
         case "fs.entries": message = .fsEntries(try payload(from: data, type: header.type))
         case "fs.download": message = .fsDownload(try payload(from: data, type: header.type))
         case "fs.upload": message = .fsUpload(try payload(from: data, type: header.type))

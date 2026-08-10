@@ -30,6 +30,38 @@ enum FileFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum ViewMode: String {
+    case list, grid
+}
+
+enum SortField: String, CaseIterable, Identifiable {
+    case name = "Name"
+    case date = "Date modified"
+    case size = "Size"
+    var id: String { rawValue }
+}
+
+/// Shortcuts to the folders that actually matter on an Android phone.
+struct Place: Identifiable, Hashable {
+    let name: String
+    let symbol: String
+    let components: [String]
+    var id: String { components.joined(separator: "/") }
+
+    static let all: [Place] = [
+        Place(name: "Camera", symbol: "camera", components: ["DCIM", "Camera"]),
+        Place(name: "Screenshots", symbol: "square.dashed",
+              components: ["DCIM", "Screenshots"]),
+        Place(name: "Downloads", symbol: "arrow.down.circle", components: ["Download"]),
+        Place(name: "WhatsApp", symbol: "bubble.left.and.bubble.right",
+              components: ["Android", "media", "com.whatsapp", "WhatsApp", "Media"]),
+        Place(name: "Pictures", symbol: "photo", components: ["Pictures"]),
+        Place(name: "Movies", symbol: "film", components: ["Movies"]),
+        Place(name: "Music", symbol: "music.note", components: ["Music"]),
+        Place(name: "Documents", symbol: "doc", components: ["Documents"]),
+    ]
+}
+
 /// State + operations behind the phone-files window.
 @MainActor
 @Observable
@@ -43,14 +75,57 @@ final class FileBrowserModel {
     var isLoading = false
     var errorMessage: String?
     var transferStatus: String?
-    var filter: FileFilter = .all
-
-    var filteredEntries: [FsEntry] {
-        switch filter {
-        case .all: entries
-        case .images: entries.filter { $0.isDir || $0.kind == .image }
-        case .videos: entries.filter { $0.isDir || $0.kind == .video }
+    var filter: FileFilter = .all {
+        didSet {
+            guard filter != oldValue else { return }
+            entries = []
+            Task { await refresh() }
         }
+    }
+
+    var searchText = ""
+    var sortField: SortField = .name
+    var sortAscending = true
+    var transferProgress: Double?
+
+    var viewMode: ViewMode = ViewMode(
+        rawValue: UserDefaults.standard.string(forKey: "fileViewMode") ?? "list") ?? .list {
+        didSet { UserDefaults.standard.set(viewMode.rawValue, forKey: "fileViewMode") }
+    }
+
+    /// Search text applied to whatever the current mode loaded (a folder listing
+    /// for All, or a recursive media sweep for Images/Videos), then sorted.
+    var filteredEntries: [FsEntry] {
+        var result = entries
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        if !query.isEmpty {
+            result = result.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        }
+        return result.sorted { a, b in
+            if a.isDir != b.isDir { return a.isDir }
+            let ordered = switch sortField {
+            case .name: a.name.localizedStandardCompare(b.name) == .orderedAscending
+            case .date: a.mtimeMillis < b.mtimeMillis
+            case .size: a.size < b.size
+            }
+            return sortAscending ? ordered : !ordered
+        }
+    }
+
+    var canGoBack: Bool { !pathComponents.isEmpty }
+
+    func goBack() {
+        guard canGoBack else { return }
+        pathComponents.removeLast()
+        entries = []
+        Task { await refresh() }
+    }
+
+    func open(_ place: Place) {
+        pathComponents = place.components
+        entries = []
+        searchText = ""
+        Task { await refresh() }
     }
 
     // MARK: thumbnails
@@ -59,31 +134,39 @@ final class FileBrowserModel {
     private var thumbsInFlight: Set<String> = []
     private var thumbFailures: Set<String> = []
 
-    func thumbnail(for entry: FsEntry) -> NSImage? {
-        thumbnails[currentPath + "/" + entry.name]
+    func thumbnail(for entry: FsEntry, edge: Int) -> NSImage? {
+        thumbnails[cacheKey(entry, edge)]
     }
 
-    func loadThumbnailIfNeeded(_ entry: FsEntry) {
+    func loadThumbnailIfNeeded(_ entry: FsEntry, edge: Int) {
         guard entry.kind == .image || entry.kind == .video else { return }
-        let path = currentPath + "/" + entry.name
-        guard thumbnails[path] == nil,
-              !thumbsInFlight.contains(path),
-              !thumbFailures.contains(path) else { return }
-        thumbsInFlight.insert(path)
+        let path = remotePath(for: entry)
+        let key = cacheKey(entry, edge)
+        guard thumbnails[key] == nil,
+              !thumbsInFlight.contains(key),
+              !thumbFailures.contains(key),
+              // Thumbnails share the control connection with everything else;
+              // a few at a time keeps listings and transfers responsive.
+              thumbsInFlight.count < 4 else { return }
+        thumbsInFlight.insert(key)
         Task {
-            defer { thumbsInFlight.remove(path) }
+            defer { thumbsInFlight.remove(key) }
             guard let reply = try? await manager.request(
-                .fsThumb(.init(maxEdge: 96, path: path))),
+                .fsThumb(.init(maxEdge: edge, path: path))),
                 case .fsThumbData(let payload) = reply.message,
                 let base64 = payload.dataBase64,
                 let data = Data(base64Encoded: base64),
                 let image = NSImage(data: data)
             else {
-                thumbFailures.insert(path)
+                thumbFailures.insert(key)
                 return
             }
-            thumbnails[path] = image
+            thumbnails[key] = image
         }
+    }
+
+    private func cacheKey(_ entry: FsEntry, _ edge: Int) -> String {
+        "\(remotePath(for: entry))#\(edge)"
     }
 
     private var uploadWaiters: [String: CheckedContinuation<FsTransferResultPayload, Never>] = [:]
@@ -99,19 +182,43 @@ final class FileBrowserModel {
     func refresh() async {
         isLoading = true
         errorMessage = nil
+        let requestedPath = currentPath
+        let requestedFilter = filter
         defer { isLoading = false }
         do {
-            let reply = try await manager.request(.fsList(.init(path: currentPath)))
-            guard case .fsEntries(let payload) = reply.message else { return }
+            let reply: InboundEnvelope
+            switch requestedFilter {
+            case .all:
+                reply = try await manager.request(.fsList(.init(path: requestedPath)))
+            case .images, .videos:
+                // Media views sweep the whole subtree, so they can take a while.
+                reply = try await manager.request(
+                    .fsSearch(.init(
+                        kinds: [requestedFilter == .images ? "image" : "video"],
+                        maxDepth: 8, path: requestedPath)),
+                    timeout: 90)
+            }
+            // Ignore replies for a folder/mode we already navigated away from.
+            guard requestedPath == currentPath, requestedFilter == filter else { return }
+            guard case .fsEntries(let payload) = reply.message else {
+                entries = []
+                errorMessage = "Unexpected reply for \(requestedPath)"
+                return
+            }
             entries = payload.entries
         } catch {
-            errorMessage = "Couldn't list \(currentPath): \(error.localizedDescription)"
+            // Never keep a stale listing: showing the previous folder's rows made
+            // repeated clicks append the same folder to the path over and over.
+            guard requestedPath == currentPath, requestedFilter == filter else { return }
+            entries = []
+            errorMessage = "Couldn't open \(requestedPath): \(error.localizedDescription)"
         }
     }
 
     func enter(_ entry: FsEntry) {
         guard entry.isDir else { return }
         pathComponents.append(entry.name)
+        entries = []
         Task { await refresh() }
     }
 
@@ -122,28 +229,56 @@ final class FileBrowserModel {
         } else {
             pathComponents = []
         }
+        entries = []
         Task { await refresh() }
     }
 
     // MARK: downloads
 
+    /// Absolute path on the phone for an entry in the current view (handles the
+    /// relative paths that recursive media searches return).
+    func remotePath(for entry: FsEntry) -> String {
+        currentPath + "/" + (entry.relPath ?? entry.name)
+    }
+
+    /// The folder an entry lives in, relative to the current view ("" if direct).
+    func containingFolder(of entry: FsEntry) -> String {
+        guard let rel = entry.relPath else { return "" }
+        let parts = rel.split(separator: "/").dropLast()
+        return parts.joined(separator: "/")
+    }
+
     /// Downloads [entry] into the given directory; returns the local file URL.
     func download(_ entry: FsEntry, into directory: URL) async throws -> URL {
-        let remotePath = currentPath + "/" + entry.name
-        transferStatus = "Downloading \(entry.name)…"
-        defer { transferStatus = nil }
+        try await download(
+            remotePath: remotePath(for: entry), name: entry.name,
+            expectedSize: entry.size, into: directory, saveAs: nil)
+    }
+
+    /// Downloads any phone path; [saveAs] overrides the destination file URL.
+    func download(
+        remotePath: String, name: String, expectedSize: Int64,
+        into directory: URL, saveAs: URL?
+    ) async throws -> URL {
+        transferStatus = "Downloading \(name)"
+        transferProgress = 0
+        defer { transferStatus = nil; transferProgress = nil }
 
         let reply = try await manager.request(.fsDownload(.init(path: remotePath)))
         guard case .fsTransferReady(let ready) = reply.message else {
             throw ConnectionManager.RequestError.notConnected
         }
         let stream = try manager.openStream()
-        let destination = uniqueURL(for: entry.name, in: directory)
+        let destination = saveAs ?? uniqueURL(for: name, in: directory)
+        let total = max(ready.size ?? expectedSize, 1)
         let sha = try await stream.download(
-            token: ready.token, to: destination, expectedSize: ready.size ?? entry.size)
+            token: ready.token, to: destination, expectedSize: ready.size ?? expectedSize,
+            onProgress: { [weak self] received in
+                Task { @MainActor in self?.transferProgress = Double(received) / Double(total) }
+            })
         manager.send(.fsTransferResult(.init(
             message: nil, ok: true, sha256: sha, token: ready.token)))
-        log.info("downloaded \(entry.name) sha=\(sha.prefix(12), privacy: .public)…")
+        log.info("downloaded \(name) sha=\(sha.prefix(12), privacy: .public)…")
         return destination
     }
 
@@ -159,15 +294,30 @@ final class FileBrowserModel {
         }
     }
 
-    /// Drag-out support: downloads to a temp dir and hands Finder the file.
-    func downloadForDrag(name: String, remoteDirectory: String) async throws -> URL {
-        guard let entry = entries.first(where: { $0.name == name }) else {
-            throw ConnectionManager.RequestError.notConnected
+    func saveAs(_ entry: FsEntry) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = entry.name
+        panel.message = "Save \(entry.name) from your phone"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            do {
+                _ = try await download(
+                    remotePath: remotePath(for: entry), name: entry.name,
+                    expectedSize: entry.size,
+                    into: url.deletingLastPathComponent(), saveAs: url)
+            } catch {
+                errorMessage = "Save failed: \(error.localizedDescription)"
+            }
         }
+    }
+
+    /// Drag-out support: downloads to a temp dir and hands Finder the real file.
+    func downloadForDrag(remotePath path: String, name: String) async throws -> URL {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("ecosystem-drags/\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        return try await download(entry, into: tempDir)
+        return try await download(
+            remotePath: path, name: name, expectedSize: 0, into: tempDir, saveAs: nil)
     }
 
     // MARK: uploads
@@ -190,15 +340,21 @@ final class FileBrowserModel {
         let size = (try FileManager.default
             .attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
         let destPath = currentPath + "/" + url.lastPathComponent
-        transferStatus = "Uploading \(url.lastPathComponent)…"
-        defer { transferStatus = nil }
+        transferStatus = "Uploading \(url.lastPathComponent)"
+        transferProgress = 0
+        defer { transferStatus = nil; transferProgress = nil }
 
         let reply = try await manager.request(.fsUpload(.init(destPath: destPath, size: size)))
         guard case .fsTransferReady(let ready) = reply.message else {
             throw ConnectionManager.RequestError.notConnected
         }
         let stream = try manager.openStream()
-        try await stream.upload(token: ready.token, from: url)
+        let total = max(size, 1)
+        try await stream.upload(
+            token: ready.token, from: url,
+            onProgress: { [weak self] sent in
+                Task { @MainActor in self?.transferProgress = Double(sent) / Double(total) }
+            })
 
         let result = await withCheckedContinuation { cont in
             uploadWaiters[ready.token] = cont

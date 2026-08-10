@@ -37,10 +37,18 @@ struct FsEntry: Codable, Equatable, Hashable {
     let isDir: Bool
     let mtimeMillis: Int64
     let name: String
+    /// Path relative to the listed/searched folder; absent for direct listings.
+    var relPath: String?
     let size: Int64
 }
 
 struct FsListPayload: Codable, Equatable {
+    let path: String
+}
+
+struct FsSearchPayload: Codable, Equatable {
+    let kinds: [String]
+    let maxDepth: Int
     let path: String
 }
 
@@ -94,6 +102,7 @@ enum Message: Equatable {
     case ringStopped
     case streamAttach(StreamAttachPayload)
     case fsList(FsListPayload)
+    case fsSearch(FsSearchPayload)
     case fsEntries(FsEntriesPayload)
     case fsDownload(FsDownloadPayload)
     case fsUpload(FsUploadPayload)
@@ -120,6 +129,7 @@ enum Message: Equatable {
         case .ringStopped: "ring.stopped"
         case .streamAttach: "stream.attach"
         case .fsList: "fs.list"
+        case .fsSearch: "fs.search"
         case .fsEntries: "fs.entries"
         case .fsDownload: "fs.download"
         case .fsUpload: "fs.upload"

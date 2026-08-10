@@ -45,6 +45,7 @@ actor ControlConnection {
     private let reader = FrameReader()
     private var continuation: AsyncStream<Event>.Continuation?
     private var pingTask: Task<Void, Never>?
+    private var receiveTask: Task<Void, Never>?
     private var lastReceived = Date()
     private var closed = false
     private var isReady = false
@@ -139,33 +140,47 @@ actor ControlConnection {
         }
     }
 
+    /// Reads sequentially: each chunk is awaited before the next is requested, so
+    /// bytes reach the frame reader in wire order. (Spawning a Task per receive
+    /// callback could reassemble a multi-chunk reply out of order and corrupt it.)
     private func receiveLoop() {
-        connection.receive(
-            minimumIncompleteLength: 1, maximumLength: 64 * 1024
-        ) { [weak self] data, _, isComplete, error in
+        receiveTask = Task { [weak self] in
             guard let self else { return }
-            Task { await self.handleReceive(data: data, isComplete: isComplete, error: error) }
+            while await !self.isClosed {
+                do {
+                    let (data, isComplete) = try await self.receiveChunk()
+                    if let data, !data.isEmpty {
+                        try await self.ingest(data)
+                    }
+                    if isComplete { break }
+                } catch {
+                    break
+                }
+            }
+            await self.finish()
         }
     }
 
-    private func handleReceive(data: Data?, isComplete: Bool, error: NWError?) {
-        if let data, !data.isEmpty {
-            lastReceived = Date()
-            do {
-                for frame in try reader.append(data) {
-                    let envelope = try ProtocolCodec.decodeFrame(frame)
-                    continuation?.yield(.message(envelope))
+    private var isClosed: Bool { closed }
+
+    private func receiveChunk() async throws -> (Data?, Bool) {
+        try await withCheckedThrowingContinuation { cont in
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) {
+                data, _, isComplete, error in
+                if let error {
+                    cont.resume(throwing: error)
+                } else {
+                    cont.resume(returning: (data, isComplete))
                 }
-            } catch {
-                finish()
-                return
             }
         }
-        if isComplete || error != nil {
-            finish()
-            return
+    }
+
+    private func ingest(_ data: Data) throws {
+        lastReceived = Date()
+        for frame in try reader.append(data) {
+            continuation?.yield(.message(try ProtocolCodec.decodeFrame(frame)))
         }
-        receiveLoop()
     }
 
     private func startPing() {
@@ -190,6 +205,7 @@ actor ControlConnection {
         guard !closed else { return }
         closed = true
         pingTask?.cancel()
+        receiveTask?.cancel()
         connection.cancel()
         continuation?.yield(.closed)
         continuation?.finish()

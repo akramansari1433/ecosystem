@@ -47,7 +47,17 @@ data class FsEntry(
     val isDir: Boolean,
     val mtimeMillis: Long,
     val name: String,
+    /** Path relative to the listed/searched folder; absent for direct listings. */
+    val relPath: String? = null,
     val size: Long,
+)
+
+@Serializable
+data class FsSearchPayload(
+    /** "image", "video" — matched by file extension. */
+    val kinds: List<String>,
+    val maxDepth: Int,
+    val path: String,
 )
 
 @Serializable
@@ -112,6 +122,7 @@ sealed interface Message {
     data object RingStopped : Message
     data class StreamAttach(val payload: StreamAttachPayload) : Message
     data class FsList(val payload: FsListPayload) : Message
+    data class FsSearch(val payload: FsSearchPayload) : Message
     data class FsEntries(val payload: FsEntriesPayload) : Message
     data class FsDownload(val payload: FsDownloadPayload) : Message
     data class FsUpload(val payload: FsUploadPayload) : Message
@@ -138,6 +149,7 @@ sealed interface Message {
             RingStopped -> "ring.stopped"
             is StreamAttach -> "stream.attach"
             is FsList -> "fs.list"
+            is FsSearch -> "fs.search"
             is FsEntries -> "fs.entries"
             is FsDownload -> "fs.download"
             is FsUpload -> "fs.upload"

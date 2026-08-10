@@ -3,7 +3,9 @@ import Foundation
 /// Incremental parser for the control-connection framing:
 /// [uint32 big-endian length][payload]. See docs/protocol.md §2.1.
 final class FrameReader {
-    static let maxFrameBytes = 1_048_576
+    /// 8 MiB: large directory listings and base64 thumbnails travel on the
+    /// control connection (docs/protocol.md §2.1).
+    static let maxFrameBytes = 8_388_608
 
     enum FrameError: Error, Equatable {
         case oversizedFrame(declared: Int)

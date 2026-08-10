@@ -1,6 +1,6 @@
 {
   "comment": "Golden fixtures: JSON control-frame encoding. framedHex = 4-byte BE length + UTF-8 JSON. Decoders must accept any key order; encoders are tested byte-exact against these.",
-  "maxFrameBytes": 1048576,
+  "maxFrameBytes": 8388608,
   "cases": [
     {
       "name": "hello",

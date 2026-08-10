@@ -42,6 +42,7 @@ object ProtocolCodec {
             is Message.ClipboardSet -> json.encodeToJsonElement(message.payload)
             is Message.StreamAttach -> json.encodeToJsonElement(message.payload)
             is Message.FsList -> json.encodeToJsonElement(message.payload)
+            is Message.FsSearch -> json.encodeToJsonElement(message.payload)
             is Message.FsEntries -> json.encodeToJsonElement(message.payload)
             is Message.FsDownload -> json.encodeToJsonElement(message.payload)
             is Message.FsUpload -> json.encodeToJsonElement(message.payload)
@@ -78,6 +79,7 @@ object ProtocolCodec {
             "ring.stopped" -> Message.RingStopped
             "stream.attach" -> Message.StreamAttach(payload(raw))
             "fs.list" -> Message.FsList(payload(raw))
+            "fs.search" -> Message.FsSearch(payload(raw))
             "fs.entries" -> Message.FsEntries(payload(raw))
             "fs.download" -> Message.FsDownload(payload(raw))
             "fs.upload" -> Message.FsUpload(payload(raw))

@@ -25,8 +25,12 @@ exact DER byte match of the pinned peer certificate.
 [uint32 big-endian length][UTF-8 JSON payload of that length]
 ```
 
-Max frame: 1 MiB (1,048,576 bytes). A peer receiving a larger declared length MUST
-close the connection.
+Max frame: 8 MiB (8,388,608 bytes) — large directory listings and base64 thumbnails
+travel on this connection. A peer receiving a larger declared length MUST close the
+connection.
+
+Receivers MUST feed bytes to the frame parser in wire order; a single frame often
+spans several socket reads.
 
 ### 2.2 Stream connections (binary frames, after attach)
 

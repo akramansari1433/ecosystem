@@ -8,7 +8,8 @@ import java.io.ByteArrayOutputStream
  */
 class FrameReader {
     companion object {
-        const val MAX_FRAME_BYTES = 1_048_576
+        /** 8 MiB: large directory listings and base64 thumbnails travel here. */
+        const val MAX_FRAME_BYTES = 8_388_608
     }
 
     class OversizedFrameException(val declared: Int) :
