@@ -41,6 +41,12 @@ object ProtocolCodec {
             is Message.PairAbort -> json.encodeToJsonElement(message.payload)
             is Message.ClipboardSet -> json.encodeToJsonElement(message.payload)
             is Message.StreamAttach -> json.encodeToJsonElement(message.payload)
+            is Message.FsList -> json.encodeToJsonElement(message.payload)
+            is Message.FsEntries -> json.encodeToJsonElement(message.payload)
+            is Message.FsDownload -> json.encodeToJsonElement(message.payload)
+            is Message.FsUpload -> json.encodeToJsonElement(message.payload)
+            is Message.FsTransferReady -> json.encodeToJsonElement(message.payload)
+            is Message.FsTransferResult -> json.encodeToJsonElement(message.payload)
             else -> null
         }
         val body = json.encodeToString(
@@ -69,6 +75,12 @@ object ProtocolCodec {
             "ring.stop" -> Message.RingStop
             "ring.stopped" -> Message.RingStopped
             "stream.attach" -> Message.StreamAttach(payload(raw))
+            "fs.list" -> Message.FsList(payload(raw))
+            "fs.entries" -> Message.FsEntries(payload(raw))
+            "fs.download" -> Message.FsDownload(payload(raw))
+            "fs.upload" -> Message.FsUpload(payload(raw))
+            "fs.transferReady" -> Message.FsTransferReady(payload(raw))
+            "fs.transferResult" -> Message.FsTransferResult(payload(raw))
             else -> Message.Unknown(raw.type)
         }
         return InboundEnvelope(id = raw.id, replyTo = raw.replyTo, message = message)

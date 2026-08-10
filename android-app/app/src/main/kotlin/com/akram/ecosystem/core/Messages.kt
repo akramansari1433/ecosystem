@@ -42,6 +42,49 @@ data class StreamAttachPayload(
     val token: String,
 )
 
+@Serializable
+data class FsEntry(
+    val isDir: Boolean,
+    val mtimeMillis: Long,
+    val name: String,
+    val size: Long,
+)
+
+@Serializable
+data class FsListPayload(
+    val path: String,
+)
+
+@Serializable
+data class FsEntriesPayload(
+    val entries: List<FsEntry>,
+)
+
+@Serializable
+data class FsDownloadPayload(
+    val path: String,
+)
+
+@Serializable
+data class FsUploadPayload(
+    val destPath: String,
+    val size: Long,
+)
+
+@Serializable
+data class FsTransferReadyPayload(
+    val size: Long? = null,
+    val token: String,
+)
+
+@Serializable
+data class FsTransferResultPayload(
+    val message: String? = null,
+    val ok: Boolean,
+    val sha256: String? = null,
+    val token: String,
+)
+
 sealed interface Message {
     data class Hello(val payload: HelloPayload) : Message
     data object Ping : Message
@@ -57,6 +100,12 @@ sealed interface Message {
     data object RingStop : Message
     data object RingStopped : Message
     data class StreamAttach(val payload: StreamAttachPayload) : Message
+    data class FsList(val payload: FsListPayload) : Message
+    data class FsEntries(val payload: FsEntriesPayload) : Message
+    data class FsDownload(val payload: FsDownloadPayload) : Message
+    data class FsUpload(val payload: FsUploadPayload) : Message
+    data class FsTransferReady(val payload: FsTransferReadyPayload) : Message
+    data class FsTransferResult(val payload: FsTransferResultPayload) : Message
     data class Unknown(val type: String) : Message
 
     val typeString: String
@@ -75,6 +124,12 @@ sealed interface Message {
             RingStop -> "ring.stop"
             RingStopped -> "ring.stopped"
             is StreamAttach -> "stream.attach"
+            is FsList -> "fs.list"
+            is FsEntries -> "fs.entries"
+            is FsDownload -> "fs.download"
+            is FsUpload -> "fs.upload"
+            is FsTransferReady -> "fs.transferReady"
+            is FsTransferResult -> "fs.transferResult"
             is Unknown -> type
         }
 }

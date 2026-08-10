@@ -43,6 +43,29 @@ private let expectedMessages: [String: (id: String, replyTo: String?, message: M
               .error(.init(code: "version_mismatch", message: nil))),
     "stream.attach": ("00000000-0000-4000-8000-000000000009", nil,
                       .streamAttach(.init(kind: "file", token: "tok-123"))),
+    "fs.list": ("00000000-0000-4000-8000-00000000000a", nil,
+                .fsList(.init(path: "/storage/emulated/0/DCIM"))),
+    "fs.entries": ("00000000-0000-4000-8000-00000000000b",
+                   "00000000-0000-4000-8000-00000000000a",
+                   .fsEntries(.init(entries: [
+                       FsEntry(isDir: true, mtimeMillis: 1_754_870_400_000,
+                               name: "Camera", size: 0),
+                       FsEntry(isDir: false, mtimeMillis: 1_754_870_401_000,
+                               name: "pic.jpg", size: 123_456),
+                   ]))),
+    "fs.download": ("00000000-0000-4000-8000-00000000000c", nil,
+                    .fsDownload(.init(path: "/storage/emulated/0/DCIM/pic.jpg"))),
+    "fs.upload": ("00000000-0000-4000-8000-00000000000d", nil,
+                  .fsUpload(.init(destPath: "/storage/emulated/0/Download/doc.pdf",
+                                  size: 99_000))),
+    "fs.transferReady": ("00000000-0000-4000-8000-00000000000e",
+                         "00000000-0000-4000-8000-00000000000c",
+                         .fsTransferReady(.init(size: 123_456, token: "tok-dl-1"))),
+    "fs.transferResult": ("00000000-0000-4000-8000-00000000000f", nil,
+                          .fsTransferResult(.init(
+                              message: nil, ok: true,
+                              sha256: String(repeating: "ab", count: 32),
+                              token: "tok-dl-1"))),
 ]
 
 struct ProtocolCodecTests {

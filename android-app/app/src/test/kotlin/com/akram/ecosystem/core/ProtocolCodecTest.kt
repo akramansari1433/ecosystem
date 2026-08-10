@@ -33,6 +33,31 @@ private val expectedMessages: Map<String, Triple<String, String?, Message>> = ma
     "stream.attach" to Triple(
         "00000000-0000-4000-8000-000000000009", null,
         Message.StreamAttach(StreamAttachPayload(kind = "file", token = "tok-123"))),
+    "fs.list" to Triple(
+        "00000000-0000-4000-8000-00000000000a", null,
+        Message.FsList(FsListPayload(path = "/storage/emulated/0/DCIM"))),
+    "fs.entries" to Triple(
+        "00000000-0000-4000-8000-00000000000b",
+        "00000000-0000-4000-8000-00000000000a",
+        Message.FsEntries(FsEntriesPayload(entries = listOf(
+            FsEntry(isDir = true, mtimeMillis = 1_754_870_400_000, name = "Camera", size = 0),
+            FsEntry(isDir = false, mtimeMillis = 1_754_870_401_000, name = "pic.jpg", size = 123_456),
+        )))),
+    "fs.download" to Triple(
+        "00000000-0000-4000-8000-00000000000c", null,
+        Message.FsDownload(FsDownloadPayload(path = "/storage/emulated/0/DCIM/pic.jpg"))),
+    "fs.upload" to Triple(
+        "00000000-0000-4000-8000-00000000000d", null,
+        Message.FsUpload(FsUploadPayload(
+            destPath = "/storage/emulated/0/Download/doc.pdf", size = 99_000))),
+    "fs.transferReady" to Triple(
+        "00000000-0000-4000-8000-00000000000e",
+        "00000000-0000-4000-8000-00000000000c",
+        Message.FsTransferReady(FsTransferReadyPayload(size = 123_456, token = "tok-dl-1"))),
+    "fs.transferResult" to Triple(
+        "00000000-0000-4000-8000-00000000000f", null,
+        Message.FsTransferResult(FsTransferResultPayload(
+            ok = true, sha256 = "ab".repeat(32), token = "tok-dl-1"))),
 )
 
 class ProtocolCodecTest {

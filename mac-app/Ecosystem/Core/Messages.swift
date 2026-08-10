@@ -33,6 +33,42 @@ struct StreamAttachPayload: Codable, Equatable {
     let token: String
 }
 
+struct FsEntry: Codable, Equatable, Hashable {
+    let isDir: Bool
+    let mtimeMillis: Int64
+    let name: String
+    let size: Int64
+}
+
+struct FsListPayload: Codable, Equatable {
+    let path: String
+}
+
+struct FsEntriesPayload: Codable, Equatable {
+    let entries: [FsEntry]
+}
+
+struct FsDownloadPayload: Codable, Equatable {
+    let path: String
+}
+
+struct FsUploadPayload: Codable, Equatable {
+    let destPath: String
+    let size: Int64
+}
+
+struct FsTransferReadyPayload: Codable, Equatable {
+    let size: Int64?
+    let token: String
+}
+
+struct FsTransferResultPayload: Codable, Equatable {
+    let message: String?
+    let ok: Bool
+    let sha256: String?
+    let token: String
+}
+
 enum Message: Equatable {
     case hello(HelloPayload)
     case ping
@@ -48,6 +84,12 @@ enum Message: Equatable {
     case ringStop
     case ringStopped
     case streamAttach(StreamAttachPayload)
+    case fsList(FsListPayload)
+    case fsEntries(FsEntriesPayload)
+    case fsDownload(FsDownloadPayload)
+    case fsUpload(FsUploadPayload)
+    case fsTransferReady(FsTransferReadyPayload)
+    case fsTransferResult(FsTransferResultPayload)
     case unknown(String)
 
     var typeString: String {
@@ -66,6 +108,12 @@ enum Message: Equatable {
         case .ringStop: "ring.stop"
         case .ringStopped: "ring.stopped"
         case .streamAttach: "stream.attach"
+        case .fsList: "fs.list"
+        case .fsEntries: "fs.entries"
+        case .fsDownload: "fs.download"
+        case .fsUpload: "fs.upload"
+        case .fsTransferReady: "fs.transferReady"
+        case .fsTransferResult: "fs.transferResult"
         case .unknown(let type): type
         }
     }

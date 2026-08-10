@@ -73,6 +73,11 @@ optional fields omitted entirely (never `null`). Parsers MUST accept any key ord
 
 ## 4. Session messages
 
+**The client (Mac) speaks first on every connection.** Its first frame declares the
+connection's purpose: `hello` makes it the control connection (the server replies
+with its own `hello`); `stream.attach` makes it a stream connection (the server
+replies nothing and switches to binary framing).
+
 | type | direction | payload |
 |---|---|---|
 | `hello` | both, first message after connect | `{ deviceId, name, protocolVersion, capabilities }` |
