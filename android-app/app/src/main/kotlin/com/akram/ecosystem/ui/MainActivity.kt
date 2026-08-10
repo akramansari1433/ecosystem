@@ -1,8 +1,11 @@
 package com.akram.ecosystem.ui
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +27,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +86,8 @@ fun StatusScreen() {
                 }
             }
 
+            ClipboardSetupCard()
+
             state.pairing?.let { pairing ->
                 when (pairing) {
                     is ConnectionService.PairingUi.AcceptPrompt -> AcceptDialog(pairing)
@@ -87,6 +97,37 @@ fun StatusScreen() {
         }
     }
 }
+
+@Composable
+private fun ClipboardSetupCard() {
+    val context = LocalContext.current
+    var enabled by remember { mutableStateOf(isAccessibilityEnabled(context)) }
+    LifecycleResumeEffect(Unit) {
+        enabled = isAccessibilityEnabled(context)
+        onPauseOrDispose { }
+    }
+    if (enabled) return
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Phone → Mac clipboard is off", fontWeight = FontWeight.SemiBold)
+            Text(
+                "Enable the Ecosystem accessibility service so text you copy here " +
+                    "appears on your Mac.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Button(onClick = {
+                context.startActivity(
+                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }) { Text("Open Accessibility settings") }
+        }
+    }
+}
+
+private fun isAccessibilityEnabled(context: Context): Boolean =
+    Settings.Secure.getString(
+        context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        ?.contains(context.packageName) == true
 
 @Composable
 private fun AcceptDialog(prompt: ConnectionService.PairingUi.AcceptPrompt) {

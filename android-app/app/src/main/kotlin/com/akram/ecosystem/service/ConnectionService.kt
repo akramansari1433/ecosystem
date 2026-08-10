@@ -61,6 +61,9 @@ class ConnectionService : Service() {
         private const val TAG = "ConnectionService"
         private const val CHANNEL_ID = "ecosystem.status"
         private const val NOTIFICATION_ID = 1
+        private const val RING_CHANNEL_ID = "ecosystem.ring"
+        private const val RING_NOTIFICATION_ID = 2
+        private const val ACTION_STOP_RING = "com.akram.ecosystem.STOP_RING"
         const val PROTOCOL_VERSION = 1
         val CAPABILITIES = listOf("clipboard", "ring")
 
@@ -107,7 +110,10 @@ class ConnectionService : Service() {
         watchNetwork()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP_RING) stopRinging(notifyMac = true)
+        return START_STICKY
+    }
 
     override fun onBind(intent: Intent?) = null
 
@@ -200,9 +206,9 @@ class ConnectionService : Service() {
             Message.PairConfirm -> handlePairingInput(PairingEngine.Input.ReceivedConfirm)
             is Message.PairAbort ->
                 handlePairingInput(PairingEngine.Input.ReceivedAbort(m.payload.reason))
-            is Message.ClipboardSet -> onClipboardSet?.invoke(m)
-            Message.RingStart -> onRingStart?.invoke()
-            Message.RingStop -> onRingStop?.invoke()
+            is Message.ClipboardSet -> clipboardHandler.applyRemote(m.payload)
+            Message.RingStart -> startRinging()
+            Message.RingStop -> stopRinging(notifyMac = false)
             else -> Log.d(TAG, "ignoring ${m.typeString}")
         }
     }
@@ -246,11 +252,64 @@ class ConnectionService : Service() {
         _state.value = _state.value.copy(paired = false)
     }
 
-    // MARK: outbound
+    // MARK: clipboard
 
-    var onClipboardSet: ((Message.ClipboardSet) -> Unit)? = null
-    var onRingStart: (() -> Unit)? = null
-    var onRingStop: (() -> Unit)? = null
+    private val clipboardHandler by lazy {
+        com.akram.ecosystem.features.ClipboardHandler(this)
+    }
+
+    /** Called by the accessibility service whenever the user copies something. */
+    fun sendLocalClipboard(text: String) {
+        if (!clipboardHandler.shouldSend(text)) return
+        sendMessage(Message.ClipboardSet(
+            com.akram.ecosystem.core.ClipboardSetPayload(
+                text = text, tsMillis = System.currentTimeMillis())))
+    }
+
+    // MARK: ring
+
+    private val ringPlayer by lazy { com.akram.ecosystem.features.RingPlayer(this) }
+    private var ringTimeout: kotlinx.coroutines.Job? = null
+
+    private fun startRinging() {
+        ringPlayer.start()
+        showRingNotification()
+        ringTimeout?.cancel()
+        ringTimeout = scope.launch {
+            kotlinx.coroutines.delay(60_000)
+            stopRinging(notifyMac = true)
+        }
+    }
+
+    private fun stopRinging(notifyMac: Boolean) {
+        ringTimeout?.cancel()
+        if (ringPlayer.isRinging) {
+            ringPlayer.stop()
+            getSystemService(NotificationManager::class.java).cancel(RING_NOTIFICATION_ID)
+            if (notifyMac) sendMessage(Message.RingStopped)
+        }
+    }
+
+    private fun showRingNotification() {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(
+            NotificationChannel(
+                RING_CHANNEL_ID, "Find my phone", NotificationManager.IMPORTANCE_HIGH))
+        val stop = PendingIntent.getService(
+            this, 1,
+            Intent(this, ConnectionService::class.java).setAction(ACTION_STOP_RING),
+            PendingIntent.FLAG_IMMUTABLE)
+        nm.notify(
+            RING_NOTIFICATION_ID,
+            Notification.Builder(this, RING_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle("Your Mac is ringing this phone")
+                .setOngoing(true)
+                .addAction(Notification.Action.Builder(null, "Stop", stop).build())
+                .build())
+    }
+
+    // MARK: outbound
 
     fun sendMessage(message: Message, replyTo: String? = null) {
         val s = session ?: return
