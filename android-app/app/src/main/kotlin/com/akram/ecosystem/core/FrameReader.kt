@@ -34,4 +34,15 @@ class FrameReader {
         buffer = ByteArrayOutputStream().apply { write(bytes) }
         return frames
     }
+
+    /**
+     * Returns and clears any buffered bytes. Used when a connection switches from
+     * JSON to binary framing (after stream.attach): bytes past the attach frame
+     * belong to the binary stream.
+     */
+    fun drainBuffered(): ByteArray {
+        val remaining = buffer.toByteArray()
+        buffer = ByteArrayOutputStream()
+        return remaining
+    }
 }

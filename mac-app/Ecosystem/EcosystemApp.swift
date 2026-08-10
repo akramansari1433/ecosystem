@@ -10,7 +10,13 @@ struct EcosystemApp: App {
         _appState = State(initialValue: state)
         let manager = ConnectionManager(appState: state)
         _manager = State(initialValue: manager)
-        manager.start()
+        // The unit-test runner launches this app as its host; starting the real
+        // connection stack there would delete the LIVE app's keychain and battle
+        // it for the phone. Only run for real launches.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            manager.start()
+        }
+        AppServices.manager = manager
     }
 
     var body: some Scene {
@@ -19,5 +25,11 @@ struct EcosystemApp: App {
                 .environment(appState)
         }
         .menuBarExtraStyle(.window)
+
+        Window("Phone Files", id: "phone-files") {
+            FileBrowserView(model: manager.files)
+                .environment(appState)
+        }
+        .defaultSize(width: 640, height: 440)
     }
 }

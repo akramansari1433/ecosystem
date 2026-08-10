@@ -22,6 +22,14 @@ final class ConnectionManager {
     private var connectTask: Task<Void, Never>?
 
     private let clipboard = ClipboardSync()
+    private var pendingReplies: [String: CheckedContinuation<InboundEnvelope, Error>] = [:]
+    private(set) lazy var files = FileBrowserModel(manager: self)
+
+    enum RequestError: Error {
+        case notConnected
+        case timeout
+        case remote(String)
+    }
 
     private var pairedPeerURL: URL {
         IdentityStore.defaultDirectory.appendingPathComponent("paired-peer.der")
@@ -63,9 +71,22 @@ final class ConnectionManager {
         }
     }
 
+    private var activeDevice: DeviceBrowser.Device?
+
+    /// Opens a stream connection to the currently connected phone (paired only).
+    func openStream() throws -> StreamConnection {
+        guard let secIdentity, let activeDevice,
+              let pinned = try? Data(contentsOf: pairedPeerURL) else {
+            throw RequestError.notConnected
+        }
+        return StreamConnection(
+            endpoint: activeDevice.endpoint, identity: secIdentity, pinnedPeerDER: pinned)
+    }
+
     private func connect(to device: DeviceBrowser.Device) {
         guard let secIdentity else { return }
         KeychainIdentity.ensureUnlocked()
+        activeDevice = device
         let pinned = try? Data(contentsOf: pairedPeerURL)
         log.info("connecting to \(device.name, privacy: .public) (pinned: \(pinned != nil))")
         let conn = ControlConnection(
@@ -98,6 +119,10 @@ final class ConnectionManager {
 
         case .closed:
             log.info("connection closed; scheduling reconnect")
+            for (_, continuation) in pendingReplies {
+                continuation.resume(throwing: RequestError.notConnected)
+            }
+            pendingReplies.removeAll()
             connection = nil
             pairingEngine = nil
             appState.connected = false
@@ -107,7 +132,38 @@ final class ConnectionManager {
         }
     }
 
+    /// Sends a request and awaits the correlated reply (15 s timeout).
+    func request(_ message: Message) async throws -> InboundEnvelope {
+        guard let connection else { throw RequestError.notConnected }
+        let id = UUID().uuidString.lowercased()
+        let reply: InboundEnvelope = try await withCheckedThrowingContinuation { cont in
+            pendingReplies[id] = cont
+            Task {
+                do {
+                    try await connection.send(message, id: id)
+                } catch {
+                    self.pendingReplies.removeValue(forKey: id)?
+                        .resume(throwing: error)
+                }
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(15))
+                self.pendingReplies.removeValue(forKey: id)?
+                    .resume(throwing: RequestError.timeout)
+            }
+        }
+        if case .error(let payload) = reply.message {
+            throw RequestError.remote(payload.message ?? payload.code)
+        }
+        return reply
+    }
+
     private func handleMessage(_ envelope: InboundEnvelope, conn: ControlConnection) async {
+        if let replyTo = envelope.replyTo,
+           let continuation = pendingReplies.removeValue(forKey: replyTo) {
+            continuation.resume(returning: envelope)
+            return
+        }
         switch envelope.message {
         case .hello(let hello):
             guard hello.protocolVersion == 1 else {
@@ -140,6 +196,9 @@ final class ConnectionManager {
 
         case .ringStopped:
             appState.ringing = false
+
+        case .fsTransferResult(let payload):
+            files.handleTransferResult(payload)
 
         default:
             break

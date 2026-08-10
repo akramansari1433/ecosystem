@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuContent: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
     let manager: ConnectionManager
 
     var body: some View {
@@ -24,6 +25,10 @@ struct MenuContent: View {
             if appState.connected && appState.paired {
                 Button(appState.ringing ? "Stop ringing" : "Ring my phone") {
                     manager.toggleRing()
+                }
+                Button("Browse phone files…") {
+                    openWindow(id: "phone-files")
+                    NSApp.activate(ignoringOtherApps: true)
                 }
             }
 

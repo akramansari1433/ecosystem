@@ -16,13 +16,21 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import com.akram.ecosystem.core.BinaryFrames
+import com.akram.ecosystem.core.ErrorPayload
+import com.akram.ecosystem.core.FileService
 import com.akram.ecosystem.core.FrameReader
+import com.akram.ecosystem.core.FsEntriesPayload
+import com.akram.ecosystem.core.FsTransferReadyPayload
+import com.akram.ecosystem.core.FsTransferResultPayload
+import com.akram.ecosystem.core.FsUploadPayload
 import com.akram.ecosystem.core.HelloPayload
 import com.akram.ecosystem.core.Identity
 import com.akram.ecosystem.core.InboundEnvelope
 import com.akram.ecosystem.core.Message
 import com.akram.ecosystem.core.PairingEngine
 import com.akram.ecosystem.core.ProtocolCodec
+import com.akram.ecosystem.core.StreamAttachPayload
 import com.akram.ecosystem.core.TlsServer
 import com.akram.ecosystem.ui.MainActivity
 import java.io.File
@@ -65,7 +73,7 @@ class ConnectionService : Service() {
         private const val RING_NOTIFICATION_ID = 2
         private const val ACTION_STOP_RING = "com.akram.ecosystem.STOP_RING"
         const val PROTOCOL_VERSION = 1
-        val CAPABILITIES = listOf("clipboard", "ring")
+        val CAPABILITIES = listOf("clipboard", "ring", "fs")
 
         private val _state = MutableStateFlow(UiState())
         val state: StateFlow<UiState> = _state
@@ -156,14 +164,51 @@ class ConnectionService : Service() {
         }
     }
 
-    /** Runs one control connection to completion (blocking in IO dispatcher). */
+    /**
+     * The client speaks first (docs/protocol.md §4): its first frame decides
+     * whether this is the control connection (hello) or a stream (stream.attach).
+     */
     private fun handleConnection(socket: SSLSocket) {
-        val peerDer = TlsServer.peerDer(socket)
-        // The newest connection wins: drop any previous (likely stale) session.
-        session?.close()
-        // Dead-peer watchdog: the Mac pings every 10 s; 35 s of silence means the
-        // connection is gone even if TCP never noticed (Wi-Fi drop, app killed).
         socket.soTimeout = 35_000
+        val reader = FrameReader()
+        val input = socket.inputStream
+        val buf = ByteArray(32 * 1024)
+        val pending = ArrayDeque<InboundEnvelope>()
+        try {
+            while (pending.isEmpty()) {
+                val n = input.read(buf)
+                if (n < 0) {
+                    socket.close(); return
+                }
+                reader.append(buf.copyOf(n)).forEach {
+                    pending += ProtocolCodec.decodeFrame(it)
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "first-frame read failed: $t")
+            runCatching { socket.close() }
+            return
+        }
+        when (val first = pending.removeFirst().message) {
+            is Message.Hello -> runControl(socket, reader, buf, first, pending)
+            is Message.StreamAttach -> runStream(socket, reader, first.payload)
+            else -> {
+                Log.w(TAG, "unexpected first frame ${first.typeString}")
+                runCatching { socket.close() }
+            }
+        }
+    }
+
+    private fun runControl(
+        socket: SSLSocket,
+        reader: FrameReader,
+        buf: ByteArray,
+        hello: Message.Hello,
+        pending: ArrayDeque<InboundEnvelope>,
+    ) {
+        val peerDer = TlsServer.peerDer(socket)
+        // The newest control connection wins: drop any previous (stale) session.
+        session?.close()
         val s = Session(socket)
         session = s
         if (!pairedPeerFile.exists()) {
@@ -171,12 +216,17 @@ class ConnectionService : Service() {
                 PairingEngine.Role.RESPONDER, ownDer = identity.certDer, peerDer = peerDer)
         }
         try {
+            if (hello.payload.protocolVersion != PROTOCOL_VERSION) {
+                sendMessage(Message.Error(ErrorPayload("version_mismatch")))
+                return
+            }
             sendMessage(Message.Hello(HelloPayload(
                 capabilities = CAPABILITIES, deviceId = deviceId,
                 name = deviceName(), protocolVersion = PROTOCOL_VERSION)))
-            val reader = FrameReader()
+            _state.value = _state.value.copy(connected = true, peerName = hello.payload.name)
+            updateNotification("Connected to ${hello.payload.name}")
+            pending.forEach { dispatch(it) }
             val input = socket.inputStream
-            val buf = ByteArray(32 * 1024)
             while (true) {
                 val n = input.read(buf)
                 if (n < 0) break
@@ -185,7 +235,7 @@ class ConnectionService : Service() {
                 }
             }
         } catch (t: Throwable) {
-            Log.w(TAG, "connection ended: $t")
+            Log.w(TAG, "control connection ended: $t")
         } finally {
             runCatching { socket.close() }
             // Only clear state if WE are still the active session — a newer
@@ -221,8 +271,149 @@ class ConnectionService : Service() {
             is Message.ClipboardSet -> clipboardHandler.applyRemote(m.payload)
             Message.RingStart -> startRinging()
             Message.RingStop -> stopRinging(notifyMac = false)
+            is Message.FsList -> handleFsList(envelope.id, m.payload.path)
+            is Message.FsDownload -> handleFsDownload(envelope.id, m.payload.path)
+            is Message.FsUpload -> handleFsUpload(envelope.id, m.payload)
+            is Message.FsTransferResult ->
+                Log.i(TAG, "transfer ${m.payload.token}: ok=${m.payload.ok}")
             else -> Log.d(TAG, "ignoring ${m.typeString}")
         }
+    }
+
+    // MARK: files
+
+    private val fileService by lazy {
+        FileService(android.os.Environment.getExternalStorageDirectory())
+    }
+
+    private fun storageGranted() = android.os.Environment.isExternalStorageManager()
+
+    private fun handleFsList(requestId: String, path: String) {
+        if (!storageGranted()) {
+            sendMessage(Message.Error(ErrorPayload("storage_permission",
+                "Grant 'All files access' in the Ecosystem app")), replyTo = requestId)
+            return
+        }
+        runCatching { fileService.list(path) }
+            .onSuccess {
+                sendMessage(Message.FsEntries(FsEntriesPayload(it)), replyTo = requestId)
+            }
+            .onFailure {
+                sendMessage(Message.Error(ErrorPayload("fs_error", it.message)),
+                    replyTo = requestId)
+            }
+    }
+
+    private fun handleFsDownload(requestId: String, path: String) {
+        runCatching { fileService.prepareDownload(path) }
+            .onSuccess {
+                sendMessage(Message.FsTransferReady(
+                    FsTransferReadyPayload(size = it.size, token = it.token)),
+                    replyTo = requestId)
+            }
+            .onFailure {
+                sendMessage(Message.Error(ErrorPayload("fs_error", it.message)),
+                    replyTo = requestId)
+            }
+    }
+
+    private fun handleFsUpload(requestId: String, payload: FsUploadPayload) {
+        runCatching { fileService.prepareUpload(payload.destPath, payload.size) }
+            .onSuccess {
+                sendMessage(Message.FsTransferReady(FsTransferReadyPayload(token = it)),
+                    replyTo = requestId)
+            }
+            .onFailure {
+                sendMessage(Message.Error(ErrorPayload("fs_error", it.message)),
+                    replyTo = requestId)
+            }
+    }
+
+    /** Runs a file stream connection (download: we send; upload: we receive). */
+    private fun runStream(socket: SSLSocket, reader: FrameReader, attach: StreamAttachPayload) {
+        try {
+            when {
+                attach.kind != "file" -> Log.w(TAG, "unsupported stream kind ${attach.kind}")
+                else -> {
+                    fileService.takeDownload(attach.token)?.let { file ->
+                        streamFileOut(socket, file)
+                        return
+                    }
+                    fileService.takeUpload(attach.token)?.let { pending ->
+                        streamFileIn(socket, reader, pending, attach.token)
+                        return
+                    }
+                    Log.w(TAG, "unknown stream token")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "stream ended with error: $t")
+        } finally {
+            runCatching { socket.close() }
+        }
+    }
+
+    private fun streamFileOut(socket: SSLSocket, file: File) {
+        Log.i(TAG, "sending ${file.name} (${file.length()} bytes)")
+        val out = socket.outputStream
+        file.inputStream().use { input ->
+            val chunk = ByteArray(BinaryFrames.FILE_CHUNK_BYTES)
+            var offset = 0L
+            while (true) {
+                val n = input.read(chunk)
+                if (n < 0) break
+                out.write(BinaryFrames.encode(
+                    BinaryFrames.TYPE_FILE_CHUNK, offset, chunk.copyOf(n)))
+                offset += n
+            }
+        }
+        out.write(BinaryFrames.encode(BinaryFrames.TYPE_END, 0, ByteArray(0)))
+        out.flush()
+    }
+
+    private fun streamFileIn(
+        socket: SSLSocket,
+        jsonReader: FrameReader,
+        pending: FileService.PendingUpload,
+        token: String,
+    ) {
+        Log.i(TAG, "receiving ${pending.dest.name} (${pending.size} bytes)")
+        val temp = File(cacheDir, "upload-$token.part")
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val frameReader = com.akram.ecosystem.core.BinaryFrameReader()
+        var done = false
+        temp.outputStream().use { out ->
+            // Bytes that arrived coalesced with the attach frame belong to us.
+            for (frame in frameReader.append(jsonReader.drainBuffered())) {
+                if (frame.frameType == BinaryFrames.TYPE_END) done = true
+                else { out.write(frame.payload); digest.update(frame.payload) }
+            }
+            val buf = ByteArray(64 * 1024)
+            val input = socket.inputStream
+            while (!done) {
+                val n = input.read(buf)
+                if (n < 0) break
+                for (frame in frameReader.append(buf.copyOf(n))) {
+                    if (frame.frameType == BinaryFrames.TYPE_END) { done = true; break }
+                    out.write(frame.payload)
+                    digest.update(frame.payload)
+                }
+            }
+        }
+        val ok = done && temp.length() == pending.size
+        if (ok) {
+            pending.dest.parentFile?.mkdirs()
+            if (!temp.renameTo(pending.dest)) {
+                temp.copyTo(pending.dest, overwrite = true)
+                temp.delete()
+            }
+        } else {
+            temp.delete()
+        }
+        @OptIn(ExperimentalStdlibApi::class)
+        sendMessage(Message.FsTransferResult(FsTransferResultPayload(
+            ok = ok, sha256 = digest.digest().toHexString(), token = token)))
+        Log.i(TAG, "upload ${pending.dest.name}: ok=$ok")
     }
 
     // MARK: pairing

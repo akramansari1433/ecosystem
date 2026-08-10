@@ -5,7 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -103,6 +105,7 @@ fun StatusScreen() {
             }
 
             ClipboardSetupCard()
+            StorageSetupCard()
 
             state.pairing?.let { pairing ->
                 when (pairing) {
@@ -144,6 +147,32 @@ private fun ClipboardSetupCard() {
                     context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }) { Text("Open Accessibility settings") }
             }
+        }
+    }
+}
+
+@Composable
+private fun StorageSetupCard() {
+    val context = LocalContext.current
+    var granted by remember { mutableStateOf(Environment.isExternalStorageManager()) }
+    LifecycleResumeEffect(Unit) {
+        granted = Environment.isExternalStorageManager()
+        onPauseOrDispose { }
+    }
+    if (granted) return
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("File browsing needs storage access", fontWeight = FontWeight.SemiBold)
+            Text(
+                "Allow “All files access” so your Mac can browse this phone's storage.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Button(onClick = {
+                context.startActivity(
+                    Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:${context.packageName}")))
+            }) { Text("Grant storage access") }
         }
     }
 }

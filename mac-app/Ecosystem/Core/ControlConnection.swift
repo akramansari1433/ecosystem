@@ -104,9 +104,11 @@ actor ControlConnection {
         }
     }
 
-    func send(_ message: Message, replyTo: String? = nil) throws {
-        let frame = try ProtocolCodec.encodeFrame(
-            id: UUID().uuidString.lowercased(), message: message, replyTo: replyTo)
+    func send(
+        _ message: Message, replyTo: String? = nil,
+        id: String = UUID().uuidString.lowercased()
+    ) throws {
+        let frame = try ProtocolCodec.encodeFrame(id: id, message: message, replyTo: replyTo)
         connection.send(content: frame, completion: .contentProcessed { _ in })
     }
 
