@@ -270,12 +270,22 @@ class ConnectionService : Service() {
         com.akram.ecosystem.features.ClipboardHandler(this)
     }
 
-    /** Called by the accessibility service whenever the user copies something. */
-    fun sendLocalClipboard(text: String) {
-        if (!clipboardHandler.shouldSend(text)) return
+    /** Sends [text] to the Mac. Returns false when disconnected or a repeat. */
+    fun sendLocalClipboard(text: String): Boolean {
+        if (session == null) {
+            Log.i(TAG, "clipboard: no session; not sending")
+            return false
+        }
+        if (!clipboardHandler.shouldSend(text)) {
+            Log.i(TAG, "clipboard: suppressing echo/repeat")
+            return false
+        }
+        Log.i(TAG, "clipboard: sending ${text.length} chars")
+        clipboardHandler.markSent(text)
         sendMessage(Message.ClipboardSet(
             com.akram.ecosystem.core.ClipboardSetPayload(
                 text = text, tsMillis = System.currentTimeMillis())))
+        return true
     }
 
     // MARK: ring

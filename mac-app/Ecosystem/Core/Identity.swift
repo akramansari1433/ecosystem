@@ -91,20 +91,18 @@ enum KeychainIdentity {
             nil, store.certificateDER as CFData) else {
             throw KeychainIdentityError.badCertificate
         }
-        // v2: keys are imported with an any-application ACL (see permissiveAccess).
-        // v1 keychains ACL-locked the key to one build's code signature, so every
-        // rebuilt ad-hoc binary triggered a keychain password prompt.
-        try? FileManager.default.removeItem(
-            at: directory.appendingPathComponent("ecosystem.keychain-db"))
+        // The keychain is recreated from scratch on EVERY launch. Keychain item
+        // ACLs are bound to the creating binary's code signature, and ad-hoc dev
+        // builds get a new signature on every rebuild — reusing a keychain across
+        // builds is what causes macOS password popups. Durable state (key, cert,
+        // pairing pin) lives in plain files; the keychain is a disposable bridge
+        // to the SecIdentity that Network.framework requires.
+        for stale in ["ecosystem.keychain-db", "ecosystem-v2.keychain-db"] {
+            deleteKeychainIfPresent(at: directory.appendingPathComponent(stale).path)
+        }
         let keychain = try openOrCreateKeychain(
             at: directory.appendingPathComponent("ecosystem-v2.keychain-db").path)
-
-        // Fast path: key + cert already imported on an earlier launch.
         var identity: SecIdentity?
-        if SecIdentityCreateWithCertificate(keychain, certificate, &identity)
-            == errSecSuccess, let identity {
-            return identity
-        }
 
         let access = try permissiveAccess()
         var params = SecItemImportExportKeyParameters()
@@ -168,6 +166,45 @@ enum KeychainIdentity {
         return access
     }
 
+    // Only touched from ConnectionManager's MainActor flow.
+    nonisolated(unsafe) private static var openedKeychain: SecKeychain?
+
+    /// Unlocks the app keychain (no-op if not yet opened). Called before TLS
+    /// dials: macOS can lock keychains on sleep, and a locked keychain turns the
+    /// TLS signing step into a password prompt.
+    static func ensureUnlocked() {
+        guard let keychain = openedKeychain else { return }
+        _ = password.withCString {
+            SecKeychainUnlock(keychain, UInt32(strlen($0)), $0, true)
+        }
+    }
+
+    /// Disables auto-locking and unlocks. The key in here also sits in a plain
+    /// 0600 file, so keeping the keychain unlocked adds prompts-free operation
+    /// without weakening anything.
+    private static func configure(_ keychain: SecKeychain) {
+        openedKeychain = keychain
+        var settings = SecKeychainSettings(
+            version: UInt32(SEC_KEYCHAIN_SETTINGS_VERS1),
+            lockOnSleep: false, useLockInterval: false, lockInterval: UInt32.max)
+        SecKeychainSetSettings(keychain, &settings)
+        _ = password.withCString {
+            SecKeychainUnlock(keychain, UInt32(strlen($0)), $0, true)
+        }
+    }
+
+    /// Removing the file alone leaves a phantom registration in securityd
+    /// (recreating at the same path then fails with errSecDuplicateKeychain);
+    /// SecKeychainDelete unregisters AND removes the file.
+    private static func deleteKeychainIfPresent(at path: String) {
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        var keychain: SecKeychain?
+        if SecKeychainOpen(path, &keychain) == errSecSuccess, let keychain {
+            SecKeychainDelete(keychain)
+        }
+        try? FileManager.default.removeItem(atPath: path)
+    }
+
     private static func openOrCreateKeychain(at path: String) throws -> SecKeychain {
         var keychain: SecKeychain?
         if FileManager.default.fileExists(atPath: path) {
@@ -175,9 +212,7 @@ enum KeychainIdentity {
             guard status == errSecSuccess, let keychain else {
                 throw KeychainIdentityError.keychainCreateFailed(status)
             }
-            _ = password.withCString {
-                SecKeychainUnlock(keychain, UInt32(strlen($0)), $0, true)
-            }
+            configure(keychain)
             return keychain
         }
         try FileManager.default.createDirectory(

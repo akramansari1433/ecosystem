@@ -18,8 +18,13 @@ USB debugging is only needed to *install* the app. All features are wireless.
 3. Battery: Settings → Apps → Ecosystem → Battery → **Unrestricted**.
 4. Sleeping apps: Settings → Device care → Battery → Background usage limits →
    make sure Ecosystem is NOT in "Sleeping apps" / "Deep sleeping apps".
-5. Clipboard phone→Mac: tap **Open Accessibility settings** in the app and enable
-   **Ecosystem clipboard sync**. (Mac→phone clipboard works without this.)
+5. Clipboard phone→Mac — One UI only lets the app in focus read the clipboard
+   (Samsung blocks the accessibility exemption stock Android allows), so use any of:
+   - **Quick Settings tile**: edit Quick Settings, add **Send clipboard to Mac**.
+     Copy → swipe down → tap. A toast confirms "Sent to Mac".
+   - **Share menu**: select text → Share → **Send to Mac** (no copy needed).
+   - **Open the app**: opening Ecosystem auto-syncs whatever you last copied.
+   Mac→phone clipboard is instant and automatic — no setup.
 
 ## Troubleshooting
 

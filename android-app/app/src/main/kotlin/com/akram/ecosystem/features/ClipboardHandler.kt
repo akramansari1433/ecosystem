@@ -17,6 +17,9 @@ class ClipboardHandler(context: Context) {
     private var lastReceivedHash: ByteArray? = null
 
     @Volatile
+    private var lastSentHash: ByteArray? = null
+
+    @Volatile
     private var lastAppliedTs = 0L
 
     fun applyRemote(payload: ClipboardSetPayload) {
@@ -26,9 +29,19 @@ class ClipboardHandler(context: Context) {
         clipboard.setPrimaryClip(ClipData.newPlainText("Ecosystem", payload.text))
     }
 
-    /** False when [text] is the content we just received from the Mac (echo). */
-    fun shouldSend(text: String): Boolean =
-        !hash(text).contentEquals(lastReceivedHash)
+    /**
+     * False when [text] is an echo of the Mac's clipboard or a repeat of the last
+     * successful send (the auto-sync-on-focus path fires on every app open).
+     */
+    fun shouldSend(text: String): Boolean {
+        val h = hash(text)
+        return !h.contentEquals(lastReceivedHash) && !h.contentEquals(lastSentHash)
+    }
+
+    /** Record a successful send — only call once the message is actually queued. */
+    fun markSent(text: String) {
+        lastSentHash = hash(text)
+    }
 
     private fun hash(text: String): ByteArray =
         MessageDigest.getInstance("SHA-256").digest(text.toByteArray())

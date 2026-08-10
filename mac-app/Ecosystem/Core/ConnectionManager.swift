@@ -65,6 +65,7 @@ final class ConnectionManager {
 
     private func connect(to device: DeviceBrowser.Device) {
         guard let secIdentity else { return }
+        KeychainIdentity.ensureUnlocked()
         let pinned = try? Data(contentsOf: pairedPeerURL)
         log.info("connecting to \(device.name, privacy: .public) (pinned: \(pinned != nil))")
         let conn = ControlConnection(
@@ -134,6 +135,7 @@ final class ConnectionManager {
                 pairingEngine?.handle(.receivedAbort(reason: payload.reason)) ?? [], conn: conn)
 
         case .clipboardSet(let payload):
+            log.info("clipboard.set received (\(payload.text.count) chars); applying")
             clipboard.applyRemote(payload)
 
         case .ringStopped:

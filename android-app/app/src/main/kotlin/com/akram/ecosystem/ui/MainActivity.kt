@@ -1,6 +1,7 @@
 package com.akram.ecosystem.ui
 
 import android.Manifest
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -57,6 +58,21 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /**
+     * One UI only lets the focused app read the clipboard, so sync automatically
+     * whenever this app comes to the foreground (echo suppression prevents loops).
+     */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) return
+        val service = ConnectionService.instance ?: return
+        getSystemService(ClipboardManager::class.java).primaryClip
+            ?.takeIf { it.itemCount > 0 }
+            ?.getItemAt(0)?.coerceToText(this)?.toString()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let(service::sendLocalClipboard)
+    }
 }
 
 @Composable
@@ -100,34 +116,21 @@ fun StatusScreen() {
 
 @Composable
 private fun ClipboardSetupCard() {
-    val context = LocalContext.current
-    var enabled by remember { mutableStateOf(isAccessibilityEnabled(context)) }
-    LifecycleResumeEffect(Unit) {
-        enabled = isAccessibilityEnabled(context)
-        onPauseOrDispose { }
-    }
-    if (enabled) return
-
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Phone → Mac clipboard is off", fontWeight = FontWeight.SemiBold)
+            Text("Sending your clipboard to the Mac", fontWeight = FontWeight.SemiBold)
             Text(
-                "Enable the Ecosystem accessibility service so text you copy here " +
-                    "appears on your Mac.",
+                "Samsung only lets the app in focus read the clipboard, so pick " +
+                    "whichever is easiest:\n" +
+                    "•  Add the “Send clipboard to Mac” tile to Quick Settings — " +
+                    "copy, swipe down, tap.\n" +
+                    "•  Select text → Share → “Send to Mac”.\n" +
+                    "•  Or just open this app — it syncs your clipboard automatically.",
                 style = MaterialTheme.typography.bodyMedium
             )
-            Button(onClick = {
-                context.startActivity(
-                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            }) { Text("Open Accessibility settings") }
         }
     }
 }
-
-private fun isAccessibilityEnabled(context: Context): Boolean =
-    Settings.Secure.getString(
-        context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-        ?.contains(context.packageName) == true
 
 @Composable
 private fun AcceptDialog(prompt: ConnectionService.PairingUi.AcceptPrompt) {
