@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import os
@@ -6,6 +7,27 @@ private let log = Logger(subsystem: "com.akram.ecosystem", category: "files")
 
 extension FsEntry: Identifiable {
     var id: String { name + (isDir ? "/" : "") }
+
+    var kind: FileKind {
+        if isDir { return .folder }
+        switch (name as NSString).pathExtension.lowercased() {
+        case "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp": return .image
+        case "mp4", "mkv", "mov", "webm", "3gp", "avi": return .video
+        case "mp3", "m4a", "ogg", "wav", "flac", "opus": return .audio
+        default: return .other
+        }
+    }
+}
+
+enum FileKind {
+    case folder, image, video, audio, other
+}
+
+enum FileFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case images = "Images"
+    case videos = "Videos"
+    var id: String { rawValue }
 }
 
 /// State + operations behind the phone-files window.
@@ -21,6 +43,48 @@ final class FileBrowserModel {
     var isLoading = false
     var errorMessage: String?
     var transferStatus: String?
+    var filter: FileFilter = .all
+
+    var filteredEntries: [FsEntry] {
+        switch filter {
+        case .all: entries
+        case .images: entries.filter { $0.isDir || $0.kind == .image }
+        case .videos: entries.filter { $0.isDir || $0.kind == .video }
+        }
+    }
+
+    // MARK: thumbnails
+
+    private(set) var thumbnails: [String: NSImage] = [:]
+    private var thumbsInFlight: Set<String> = []
+    private var thumbFailures: Set<String> = []
+
+    func thumbnail(for entry: FsEntry) -> NSImage? {
+        thumbnails[currentPath + "/" + entry.name]
+    }
+
+    func loadThumbnailIfNeeded(_ entry: FsEntry) {
+        guard entry.kind == .image || entry.kind == .video else { return }
+        let path = currentPath + "/" + entry.name
+        guard thumbnails[path] == nil,
+              !thumbsInFlight.contains(path),
+              !thumbFailures.contains(path) else { return }
+        thumbsInFlight.insert(path)
+        Task {
+            defer { thumbsInFlight.remove(path) }
+            guard let reply = try? await manager.request(
+                .fsThumb(.init(maxEdge: 96, path: path))),
+                case .fsThumbData(let payload) = reply.message,
+                let base64 = payload.dataBase64,
+                let data = Data(base64Encoded: base64),
+                let image = NSImage(data: data)
+            else {
+                thumbFailures.insert(path)
+                return
+            }
+            thumbnails[path] = image
+        }
+    }
 
     private var uploadWaiters: [String: CheckedContinuation<FsTransferResultPayload, Never>] = [:]
 

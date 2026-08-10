@@ -55,6 +55,8 @@ enum ProtocolCodec {
         case .fsUpload(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsTransferReady(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsTransferResult(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .fsThumb(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .fsThumbData(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .ping, .pong, .pairAccept, .pairReject, .pairConfirm,
              .ringStart, .ringStop, .ringStopped, .unknown:
             body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString,
@@ -110,6 +112,8 @@ enum ProtocolCodec {
         case "fs.upload": message = .fsUpload(try payload(from: data, type: header.type))
         case "fs.transferReady": message = .fsTransferReady(try payload(from: data, type: header.type))
         case "fs.transferResult": message = .fsTransferResult(try payload(from: data, type: header.type))
+        case "fs.thumb": message = .fsThumb(try payload(from: data, type: header.type))
+        case "fs.thumbData": message = .fsThumbData(try payload(from: data, type: header.type))
         default: message = .unknown(header.type)
         }
         return InboundEnvelope(id: header.id, replyTo: header.replyTo, message: message)

@@ -47,6 +47,8 @@ object ProtocolCodec {
             is Message.FsUpload -> json.encodeToJsonElement(message.payload)
             is Message.FsTransferReady -> json.encodeToJsonElement(message.payload)
             is Message.FsTransferResult -> json.encodeToJsonElement(message.payload)
+            is Message.FsThumb -> json.encodeToJsonElement(message.payload)
+            is Message.FsThumbData -> json.encodeToJsonElement(message.payload)
             else -> null
         }
         val body = json.encodeToString(
@@ -81,6 +83,8 @@ object ProtocolCodec {
             "fs.upload" -> Message.FsUpload(payload(raw))
             "fs.transferReady" -> Message.FsTransferReady(payload(raw))
             "fs.transferResult" -> Message.FsTransferResult(payload(raw))
+            "fs.thumb" -> Message.FsThumb(payload(raw))
+            "fs.thumbData" -> Message.FsThumbData(payload(raw))
             else -> Message.Unknown(raw.type)
         }
         return InboundEnvelope(id = raw.id, replyTo = raw.replyTo, message = message)

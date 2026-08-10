@@ -78,6 +78,17 @@ data class FsTransferReadyPayload(
 )
 
 @Serializable
+data class FsThumbPayload(
+    val maxEdge: Int,
+    val path: String,
+)
+
+@Serializable
+data class FsThumbDataPayload(
+    val dataBase64: String? = null,
+)
+
+@Serializable
 data class FsTransferResultPayload(
     val message: String? = null,
     val ok: Boolean,
@@ -106,6 +117,8 @@ sealed interface Message {
     data class FsUpload(val payload: FsUploadPayload) : Message
     data class FsTransferReady(val payload: FsTransferReadyPayload) : Message
     data class FsTransferResult(val payload: FsTransferResultPayload) : Message
+    data class FsThumb(val payload: FsThumbPayload) : Message
+    data class FsThumbData(val payload: FsThumbDataPayload) : Message
     data class Unknown(val type: String) : Message
 
     val typeString: String
@@ -130,6 +143,8 @@ sealed interface Message {
             is FsUpload -> "fs.upload"
             is FsTransferReady -> "fs.transferReady"
             is FsTransferResult -> "fs.transferResult"
+            is FsThumb -> "fs.thumb"
+            is FsThumbData -> "fs.thumbData"
             is Unknown -> type
         }
 }

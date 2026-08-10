@@ -272,6 +272,7 @@ class ConnectionService : Service() {
             Message.RingStart -> startRinging()
             Message.RingStop -> stopRinging(notifyMac = false)
             is Message.FsList -> handleFsList(envelope.id, m.payload.path)
+            is Message.FsThumb -> handleFsThumb(envelope.id, m.payload)
             is Message.FsDownload -> handleFsDownload(envelope.id, m.payload.path)
             is Message.FsUpload -> handleFsUpload(envelope.id, m.payload)
             is Message.FsTransferResult ->
@@ -302,6 +303,30 @@ class ConnectionService : Service() {
                 sendMessage(Message.Error(ErrorPayload("fs_error", it.message)),
                     replyTo = requestId)
             }
+    }
+
+    private val videoExtensions = setOf("mp4", "mkv", "mov", "webm", "3gp", "avi")
+
+    private fun handleFsThumb(requestId: String, payload: com.akram.ecosystem.core.FsThumbPayload) {
+        scope.launch {
+            val size = android.util.Size(payload.maxEdge, payload.maxEdge)
+            val bitmap = runCatching {
+                val file = fileService.resolve(payload.path)
+                if (file.extension.lowercase() in videoExtensions) {
+                    android.media.ThumbnailUtils.createVideoThumbnail(file, size, null)
+                } else {
+                    android.media.ThumbnailUtils.createImageThumbnail(file, size, null)
+                }
+            }.getOrNull()
+            val base64 = bitmap?.let {
+                val out = java.io.ByteArrayOutputStream()
+                it.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, out)
+                it.recycle()
+                android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+            }
+            sendMessage(Message.FsThumbData(
+                com.akram.ecosystem.core.FsThumbDataPayload(base64)), replyTo = requestId)
+        }
     }
 
     private fun handleFsDownload(requestId: String, path: String) {

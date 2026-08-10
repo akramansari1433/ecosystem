@@ -62,6 +62,15 @@ struct FsTransferReadyPayload: Codable, Equatable {
     let token: String
 }
 
+struct FsThumbPayload: Codable, Equatable {
+    let maxEdge: Int
+    let path: String
+}
+
+struct FsThumbDataPayload: Codable, Equatable {
+    let dataBase64: String?
+}
+
 struct FsTransferResultPayload: Codable, Equatable {
     let message: String?
     let ok: Bool
@@ -90,6 +99,8 @@ enum Message: Equatable {
     case fsUpload(FsUploadPayload)
     case fsTransferReady(FsTransferReadyPayload)
     case fsTransferResult(FsTransferResultPayload)
+    case fsThumb(FsThumbPayload)
+    case fsThumbData(FsThumbDataPayload)
     case unknown(String)
 
     var typeString: String {
@@ -114,6 +125,8 @@ enum Message: Equatable {
         case .fsUpload: "fs.upload"
         case .fsTransferReady: "fs.transferReady"
         case .fsTransferResult: "fs.transferResult"
+        case .fsThumb: "fs.thumb"
+        case .fsThumbData: "fs.thumbData"
         case .unknown(let type): type
         }
     }
