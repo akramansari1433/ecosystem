@@ -17,12 +17,9 @@ actor StreamConnection {
 
     private let connection: NWConnection
 
-    init(endpoint: NWEndpoint, identity: SendableIdentity, pinnedPeerDER: Data) {
+    init(endpoint: NWEndpoint, pinnedPeerDER: Data) {
         let tls = NWProtocolTLS.Options()
         let sec = tls.securityProtocolOptions
-        if let secIdentity = sec_identity_create(identity.identity) {
-            sec_protocol_options_set_local_identity(sec, secIdentity)
-        }
         sec_protocol_options_set_verify_block(sec, { _, trust, complete in
             let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
             guard

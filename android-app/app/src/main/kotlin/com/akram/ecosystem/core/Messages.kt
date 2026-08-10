@@ -122,6 +122,16 @@ data class MirrorRotatedPayload(
 // Input coordinates are normalized 0..1 relative to the screen, so they're
 // independent of resolution and rotation. See docs/protocol.md §12.
 @Serializable
+data class AuthChallengePayload(
+    val nonce: String,
+)
+
+@Serializable
+data class AuthResponsePayload(
+    val mac: String,
+)
+
+@Serializable
 data class InputTapPayload(
     val longPress: Boolean = false,
     val x: Double,
@@ -183,6 +193,9 @@ sealed interface Message {
     data class InputTap(val payload: InputTapPayload) : Message
     data class InputSwipe(val payload: InputSwipePayload) : Message
     data class InputKey(val payload: InputKeyPayload) : Message
+    data class AuthChallenge(val payload: AuthChallengePayload) : Message
+    data class AuthResponse(val payload: AuthResponsePayload) : Message
+    data object AuthOK : Message
     data class Unknown(val type: String) : Message
 
     val typeString: String
@@ -218,6 +231,9 @@ sealed interface Message {
             is InputTap -> "input.tap"
             is InputSwipe -> "input.swipe"
             is InputKey -> "input.key"
+            is AuthChallenge -> "auth.challenge"
+            is AuthResponse -> "auth.response"
+            AuthOK -> "auth.ok"
             is Unknown -> type
         }
 }

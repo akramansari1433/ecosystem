@@ -97,6 +97,14 @@ struct MirrorRotatedPayload: Codable, Equatable {
     let width: Int
 }
 
+struct AuthChallengePayload: Codable, Equatable {
+    let nonce: String
+}
+
+struct AuthResponsePayload: Codable, Equatable {
+    let mac: String
+}
+
 struct InputTapPayload: Codable, Equatable {
     let longPress: Bool
     let x: Double
@@ -154,6 +162,9 @@ enum Message: Equatable {
     case inputTap(InputTapPayload)
     case inputSwipe(InputSwipePayload)
     case inputKey(InputKeyPayload)
+    case authChallenge(AuthChallengePayload)
+    case authResponse(AuthResponsePayload)
+    case authOK
     case unknown(String)
 
     var typeString: String {
@@ -189,6 +200,9 @@ enum Message: Equatable {
         case .inputTap: "input.tap"
         case .inputSwipe: "input.swipe"
         case .inputKey: "input.key"
+        case .authChallenge: "auth.challenge"
+        case .authResponse: "auth.response"
+        case .authOK: "auth.ok"
         case .unknown(let type): type
         }
     }

@@ -62,6 +62,20 @@ class MirrorEncoder(
         running = false
     }
 
+    val isRunning: Boolean get() = running
+
+    /** Forces an immediate IDR so a newly attached viewer sees a picture at once. */
+    fun requestKeyframe() {
+        runCatching {
+            codec?.setParameters(android.os.Bundle().apply {
+                putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+            })
+        }
+    }
+
+    /** Last SPS/PPS, so a re-attaching viewer can decode before the next IDR. */
+    fun cachedConfig(): ByteArray? = configFrame
+
     private fun drainLoop(codec: MediaCodec) {
         val info = MediaCodec.BufferInfo()
         try {
@@ -111,8 +125,9 @@ class MirrorEncoder(
             runCatching { codec.release() }
             runCatching { display?.release() }
             runCatching { surface?.release() }
-            runCatching { projection.stop() }
-            Log.i(TAG, "mirroring stopped")
+            // Deliberately NOT projection.stop(): the service keeps the
+            // projection alive so the next session needs no consent dialog.
+            Log.i(TAG, "capture session ended")
         }
     }
 

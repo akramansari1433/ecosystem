@@ -5,12 +5,6 @@ import Security
 
 private let log = Logger(subsystem: "com.akram.ecosystem", category: "connection")
 
-/// `SecIdentity` is a thread-safe CF type, but not marked Sendable; this wrapper
-/// lets it cross actor boundaries.
-struct SendableIdentity: @unchecked Sendable {
-    let identity: SecIdentity
-}
-
 /// Thread-safe capture of the peer's leaf certificate observed during the TLS
 /// handshake (the verify block runs on an arbitrary dispatch queue).
 final class PeerCertificateCapture: @unchecked Sendable {
@@ -50,12 +44,9 @@ actor ControlConnection {
     private var closed = false
     private var isReady = false
 
-    init(endpoint: NWEndpoint, identity: SendableIdentity, pinnedPeerDER: Data?) {
+    init(endpoint: NWEndpoint, pinnedPeerDER: Data?) {
         let tls = NWProtocolTLS.Options()
         let sec = tls.securityProtocolOptions
-        if let secIdentity = sec_identity_create(identity.identity) {
-            sec_protocol_options_set_local_identity(sec, secIdentity)
-        }
         let capture = self.capture
         sec_protocol_options_set_verify_block(sec, { _, trust, complete in
             let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()

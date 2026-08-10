@@ -64,9 +64,11 @@ enum ProtocolCodec {
         case .inputTap(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .inputSwipe(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .inputKey(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .authChallenge(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .authResponse(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .ping, .pong, .pairAccept, .pairReject, .pairConfirm,
              .ringStart, .ringStop, .ringStopped, .unknown,
-             .mirrorNeedsConsent, .mirrorStop:
+             .mirrorNeedsConsent, .mirrorStop, .authOK:
             body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString,
                                   payload: nil as NoPayload?)
         }
@@ -131,6 +133,9 @@ enum ProtocolCodec {
         case "input.tap": message = .inputTap(try payload(from: data, type: header.type))
         case "input.swipe": message = .inputSwipe(try payload(from: data, type: header.type))
         case "input.key": message = .inputKey(try payload(from: data, type: header.type))
+        case "auth.challenge": message = .authChallenge(try payload(from: data, type: header.type))
+        case "auth.response": message = .authResponse(try payload(from: data, type: header.type))
+        case "auth.ok": message = .authOK
         default: message = .unknown(header.type)
         }
         return InboundEnvelope(id: header.id, replyTo: header.replyTo, message: message)
@@ -147,5 +152,18 @@ enum ProtocolCodec {
 extension Data {
     var hexString: String {
         map { String(format: "%02x", $0) }.joined()
+    }
+
+    init?(hex: String) {
+        guard hex.count.isMultiple(of: 2) else { return nil }
+        var data = Data(capacity: hex.count / 2)
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let next = hex.index(index, offsetBy: 2)
+            guard let byte = UInt8(hex[index..<next], radix: 16) else { return nil }
+            data.append(byte)
+            index = next
+        }
+        self = data
     }
 }

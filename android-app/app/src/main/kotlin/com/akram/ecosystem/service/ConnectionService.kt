@@ -29,6 +29,7 @@ import com.akram.ecosystem.core.Identity
 import com.akram.ecosystem.core.InboundEnvelope
 import com.akram.ecosystem.core.Message
 import com.akram.ecosystem.core.PairingEngine
+import com.akram.ecosystem.core.PairingSecret
 import com.akram.ecosystem.core.ProtocolCodec
 import com.akram.ecosystem.core.StreamAttachPayload
 import com.akram.ecosystem.core.TlsServer
@@ -73,8 +74,10 @@ class ConnectionService : Service() {
         private const val RING_CHANNEL_ID = "ecosystem.ring"
         private const val RING_NOTIFICATION_ID = 2
         private const val CONSENT_NOTIFICATION_ID = 3
+        /** Keep capture warm this long after the Mac closes, for instant re-open. */
+        private const val MIRROR_IDLE_TIMEOUT_MS = 10 * 60 * 1000L
         private const val ACTION_STOP_RING = "com.akram.ecosystem.STOP_RING"
-        const val PROTOCOL_VERSION = 1
+        const val PROTOCOL_VERSION = 2
         val CAPABILITIES = listOf("clipboard", "ring", "fs", "mirror", "input")
 
         private val _state = MutableStateFlow(UiState())
@@ -96,6 +99,10 @@ class ConnectionService : Service() {
     private var serverSocket: SSLServerSocket? = null
     private var session: Session? = null
     private var pairingEngine: PairingEngine? = null
+    private var pendingPairNonce: ByteArray? = null
+    @Volatile
+    private var authenticated = false
+    private var authChallenge: ByteArray? = null
     private val writeMutex = Mutex()
     private lateinit var deviceId: String
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -115,7 +122,7 @@ class ConnectionService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         multicastLock = getSystemService(WifiManager::class.java)
             .createMulticastLock("ecosystem-nsd").apply { acquire() }
-        _state.value = UiState(paired = pairedPeerFile.exists())
+        _state.value = UiState(paired = PairingSecret.load(filesDir) != null)
         scope.launch { serverLoop() }
         watchNetwork()
     }
@@ -143,9 +150,9 @@ class ConnectionService : Service() {
             try {
                 // One server for the process lifetime; the trust manager reads the
                 // current pin per handshake, so pairing never changes the port.
-                val server = TlsServer(identity) {
-                    pairedPeerFile.takeIf { it.exists() }?.readBytes()
-                }.listen()
+                // Peers are authenticated at the application layer (HMAC), so the
+                // TLS server no longer asks for or pins a client certificate.
+                val server = TlsServer(identity) { null }.listen()
                 serverSocket = server
                 advertiser.register(server.localPort, deviceId, deviceName(), PROTOCOL_VERSION)
                 Log.i(TAG, "listening on ${server.localPort}")
@@ -209,15 +216,12 @@ class ConnectionService : Service() {
         hello: Message.Hello,
         pending: ArrayDeque<InboundEnvelope>,
     ) {
-        val peerDer = TlsServer.peerDer(socket)
         // The newest control connection wins: drop any previous (stale) session.
         session?.close()
         val s = Session(socket)
         session = s
-        if (!pairedPeerFile.exists()) {
-            pairingEngine = PairingEngine(
-                PairingEngine.Role.RESPONDER, ownDer = identity.certDer, peerDer = peerDer)
-        }
+        authenticated = false
+        authChallenge = null
         try {
             if (hello.payload.protocolVersion != PROTOCOL_VERSION) {
                 sendMessage(Message.Error(ErrorPayload("version_mismatch")))
@@ -228,6 +232,20 @@ class ConnectionService : Service() {
                 name = deviceName(), protocolVersion = PROTOCOL_VERSION)))
             _state.value = _state.value.copy(connected = true, peerName = hello.payload.name)
             updateNotification("Connected to ${hello.payload.name}")
+
+            val secret = PairingSecret.load(filesDir)
+            if (secret != null) {
+                // Paired: prove the peer holds the shared secret before serving.
+                val nonce = PairingSecret.newNonce()
+                authChallenge = nonce
+                @OptIn(ExperimentalStdlibApi::class)
+                sendMessage(Message.AuthChallenge(
+                    com.akram.ecosystem.core.AuthChallengePayload(nonce.toHexString())))
+            } else {
+                pairingEngine = PairingEngine(
+                    PairingEngine.Role.RESPONDER,
+                    ownDer = identity.certDer, peerDer = ByteArray(0))
+            }
             pending.forEach { dispatch(it) }
             val input = socket.inputStream
             while (true) {
@@ -254,7 +272,18 @@ class ConnectionService : Service() {
     }
 
     private fun dispatch(envelope: InboundEnvelope) {
-        when (val m = envelope.message) {
+        val message = envelope.message
+        // Everything except the handshake requires an authenticated peer.
+        if (PairingSecret.load(filesDir) != null && !authenticated) {
+            when (message) {
+                is Message.AuthResponse, Message.Ping, is Message.Hello -> Unit
+                else -> {
+                    Log.w(TAG, "dropping ${message.typeString} before auth")
+                    return
+                }
+            }
+        }
+        when (val m = message) {
             is Message.Hello -> {
                 if (m.payload.protocolVersion != PROTOCOL_VERSION) {
                     sendMessage(Message.Error(
@@ -264,6 +293,23 @@ class ConnectionService : Service() {
                 }
                 _state.value = _state.value.copy(connected = true, peerName = m.payload.name)
                 updateNotification("Connected to ${m.payload.name}")
+            }
+            is Message.AuthResponse -> {
+                val nonce = authChallenge
+                val secret = PairingSecret.load(filesDir)
+                val expected = if (nonce != null && secret != null)
+                    PairingSecret.response(nonce, secret) else null
+                if (expected != null && PairingSecret.constantTimeEquals(expected, m.payload.mac)) {
+                    authenticated = true
+                    authChallenge = null
+                    sendMessage(Message.AuthOK)
+                    Log.i(TAG, "peer authenticated")
+                } else {
+                    Log.w(TAG, "auth failed; closing")
+                    sendMessage(Message.Error(
+                        com.akram.ecosystem.core.ErrorPayload("auth_failed")))
+                    session?.close()
+                }
             }
             Message.Ping -> sendMessage(Message.Pong, replyTo = envelope.id)
             is Message.PairRequest ->
@@ -282,7 +328,7 @@ class ConnectionService : Service() {
             is Message.FsTransferResult ->
                 Log.i(TAG, "transfer ${m.payload.token}: ok=${m.payload.ok}")
             is Message.MirrorStart -> handleMirrorStart(envelope.id, m.payload)
-            Message.MirrorStop -> stopMirroring()
+            Message.MirrorStop -> pauseMirroring()
             is Message.InputTap -> {
                 val (w, h) = screenSize()
                 com.akram.ecosystem.accessibility.RemoteInput.tap(
@@ -513,6 +559,19 @@ class ConnectionService : Service() {
     fun userRejected() = handlePairingInput(PairingEngine.Input.UserRejected)
 
     private fun handlePairingInput(input: PairingEngine.Input) {
+        // The Mac's nonce arrives as the pair.request "fingerprint"; rebuild the
+        // engine with it so both sides derive the same verification code.
+        if (input is PairingEngine.Input.ReceivedRequest) {
+            @OptIn(ExperimentalStdlibApi::class)
+            val nonce = runCatching { input.fingerprint.hexToByteArray() }.getOrNull()
+            if (nonce == null) {
+                Log.w(TAG, "malformed pairing nonce")
+                return
+            }
+            pendingPairNonce = nonce
+            pairingEngine = PairingEngine(
+                PairingEngine.Role.RESPONDER, ownDer = identity.certDer, peerDer = nonce)
+        }
         val engine = pairingEngine ?: return
         val session = session ?: return
         for (effect in engine.handle(input)) {
@@ -524,10 +583,14 @@ class ConnectionService : Service() {
                 is PairingEngine.Effect.DisplayCode ->
                     _state.value = _state.value.copy(pairing = PairingUi.Code(effect.code))
                 PairingEngine.Effect.PersistPeerCert ->
-                    pairedPeerFile.writeBytes(TlsServer.peerDer(session.socket))
+                    pendingPairNonce?.let {
+                        PairingSecret.save(
+                            filesDir, PairingSecret.derive(it, identity.certDer))
+                    }
                 PairingEngine.Effect.Complete -> {
                     _state.value = _state.value.copy(paired = true, pairing = null)
-                    // Reconnect in pinned mode: drop the connection; Mac re-dials.
+                    pendingPairNonce = null
+                    // Reconnect authenticated: drop the connection; the Mac re-dials.
                     session.close()
                 }
                 is PairingEngine.Effect.Fail -> {
@@ -541,6 +604,8 @@ class ConnectionService : Service() {
     /** Clears the pairing so a new Mac can pair (Settings action). */
     fun unpair() {
         pairedPeerFile.delete()
+        PairingSecret.clear(filesDir)
+        authenticated = false
         session?.close()
         _state.value = _state.value.copy(paired = false)
     }
@@ -624,8 +689,15 @@ class ConnectionService : Service() {
     /** One-shot consent grant handed over by MainActivity. */
     @Volatile
     private var projectionGrant: Pair<Int, Intent>? = null
+
+    /** Kept alive between sessions so mirroring only needs approving once. */
+    @Volatile
+    private var liveProjection: android.media.projection.MediaProjection? = null
     private var mirrorEncoder: com.akram.ecosystem.features.MirrorEncoder? = null
     private var mirrorToken: String? = null
+    private var mirrorWidth = 0
+    private var mirrorHeight = 0
+    private var idleMirrorJob: kotlinx.coroutines.Job? = null
     private var pendingMirrorFrames = ArrayDeque<Triple<Int, Long, ByteArray>>()
     @Volatile
     private var mirrorSocket: SSLSocket? = null
@@ -653,7 +725,7 @@ class ConnectionService : Service() {
         payload: com.akram.ecosystem.core.MirrorStartPayload,
     ) {
         val grant = projectionGrant
-        if (grant == null) {
+        if (grant == null && liveProjection == null) {
             _state.value = _state.value.copy(mirrorConsentPending = true)
             // The Mac polls every 2 s while waiting; prompt the user only once.
             if (!consentPromptShown) {
@@ -671,8 +743,25 @@ class ConnectionService : Service() {
             return
         }
         consentPromptShown = false
-        projectionGrant = null // grants are single-use
-        stopMirroring()
+        // Android 14+ allows only ONE capture per consent, so a running session
+        // is reused rather than rebuilt — that is what makes mirroring instant
+        // on the second and later opens.
+        mirrorEncoder?.takeIf { it.isRunning }?.let { encoder ->
+            val token = UUID.randomUUID().toString()
+            mirrorToken = token
+            detachMirrorStream()
+            encoder.cachedConfig()?.let {
+                emitMirrorFrame(BinaryFrames.TYPE_CODEC_CONFIG, 0, it)
+            }
+            encoder.requestKeyframe()
+            sendMessage(Message.MirrorStarted(
+                com.akram.ecosystem.core.MirrorStartedPayload(
+                    height = mirrorHeight, rotationDeg = 0,
+                    token = token, width = mirrorWidth)),
+                replyTo = requestId)
+            Log.i(TAG, "reusing live capture session")
+            return
+        }
         try {
             // API 34+: the service must be foregrounded with the mediaProjection
             // type BEFORE getMediaProjection, and a callback registered before
@@ -681,16 +770,27 @@ class ConnectionService : Service() {
                 NOTIFICATION_ID, buildNotification("Mirroring to your Mac"),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-            val manager = getSystemService(
-                android.media.projection.MediaProjectionManager::class.java)
-            val projection = manager.getMediaProjection(grant.first, grant.second)
-                ?: throw IllegalStateException("projection unavailable")
-            projection.registerCallback(object :
-                android.media.projection.MediaProjection.Callback() {
-                override fun onStop() {
-                    stopMirroring()
-                }
-            }, android.os.Handler(android.os.Looper.getMainLooper()))
+            // Reuse a live projection so the user only approves once; Android
+            // consent tokens are single-use, but the projection itself can drive
+            // any number of capture sessions until it is stopped or revoked.
+            val projection = liveProjection ?: run {
+                val grantValue = grant ?: throw IllegalStateException("no consent")
+                projectionGrant = null
+                val manager = getSystemService(
+                    android.media.projection.MediaProjectionManager::class.java)
+                val fresh = manager.getMediaProjection(grantValue.first, grantValue.second)
+                    ?: throw IllegalStateException("projection unavailable")
+                fresh.registerCallback(object :
+                    android.media.projection.MediaProjection.Callback() {
+                    override fun onStop() {
+                        Log.i(TAG, "projection revoked")
+                        liveProjection = null
+                        stopMirroring()
+                    }
+                }, android.os.Handler(android.os.Looper.getMainLooper()))
+                liveProjection = fresh
+                fresh
+            }
 
             val bounds = getSystemService(android.view.WindowManager::class.java)
                 .maximumWindowMetrics.bounds
@@ -701,6 +801,8 @@ class ConnectionService : Service() {
             val h = ((bounds.height() * scale).toInt() / 16) * 16
             val token = UUID.randomUUID().toString()
             mirrorToken = token
+            mirrorWidth = w
+            mirrorHeight = h
             pendingMirrorFrames.clear()
             mirrorEncoder = com.akram.ecosystem.features.MirrorEncoder(
                 projection, w, h, payload.bitrateBps,
@@ -753,16 +855,44 @@ class ConnectionService : Service() {
         }
         // Block until the Mac closes the stream (its way of ending the session).
         runCatching { while (socket.inputStream.read() >= 0) Unit }
+        if (mirrorSocket === socket) {
+            mirrorSocket = null
+            pauseMirroring()
+        }
+    }
+
+    /** Detaches the viewer but leaves capture running for an instant re-open. */
+    private fun detachMirrorStream() {
+        runCatching { mirrorSocket?.close() }
         mirrorSocket = null
-        stopMirroring()
+        synchronized(pendingMirrorFrames) { pendingMirrorFrames.clear() }
+    }
+
+    /**
+     * Called when the Mac closes the window. Capture stays alive (reused on the
+     * next open, no consent dialog) until it has been idle for a while.
+     */
+    private fun pauseMirroring() {
+        detachMirrorStream()
+        mirrorToken = null
+        idleMirrorJob?.cancel()
+        idleMirrorJob = scope.launch {
+            kotlinx.coroutines.delay(MIRROR_IDLE_TIMEOUT_MS)
+            if (mirrorSocket == null) {
+                Log.i(TAG, "mirror idle; releasing capture")
+                stopMirroring()
+            }
+        }
     }
 
     private fun stopMirroring() {
+        idleMirrorJob?.cancel()
+        detachMirrorStream()
         mirrorEncoder?.stop()
         mirrorEncoder = null
         mirrorToken = null
-        runCatching { mirrorSocket?.close() }
-        mirrorSocket = null
+        runCatching { liveProjection?.stop() }
+        liveProjection = null
         startForeground(
             NOTIFICATION_ID,
             buildNotification(_state.value.peerName?.let { "Connected to $it" }

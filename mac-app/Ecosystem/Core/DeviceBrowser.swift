@@ -14,14 +14,25 @@ final class DeviceBrowser {
     }
 
     var onDevicesChanged: (([Device]) -> Void)?
+    /// Fired when the browser dies (network change, sleep) and must be restarted.
+    var onNeedsRestart: (() -> Void)?
     private var browser: NWBrowser?
 
     func start() {
         stop()
         let browser = NWBrowser(
             for: .bonjour(type: "_ecosys._tcp", domain: nil), using: .init())
-        browser.stateUpdateHandler = { state in
+        browser.stateUpdateHandler = { [weak self] state in
             log.info("browser state: \(String(describing: state), privacy: .public)")
+            switch state {
+            case .failed, .cancelled:
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(2))
+                    self?.onNeedsRestart?()
+                }
+            default:
+                break
+            }
         }
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             log.info("browse results: \(results.count) [\(results.map { String(describing: $0.endpoint) }.joined(separator: ", "), privacy: .public)]")

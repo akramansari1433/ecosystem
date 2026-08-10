@@ -56,6 +56,8 @@ object ProtocolCodec {
             is Message.InputTap -> json.encodeToJsonElement(message.payload)
             is Message.InputSwipe -> json.encodeToJsonElement(message.payload)
             is Message.InputKey -> json.encodeToJsonElement(message.payload)
+            is Message.AuthChallenge -> json.encodeToJsonElement(message.payload)
+            is Message.AuthResponse -> json.encodeToJsonElement(message.payload)
             else -> null
         }
         val body = json.encodeToString(
@@ -101,6 +103,9 @@ object ProtocolCodec {
             "input.tap" -> Message.InputTap(payload(raw))
             "input.swipe" -> Message.InputSwipe(payload(raw))
             "input.key" -> Message.InputKey(payload(raw))
+            "auth.challenge" -> Message.AuthChallenge(payload(raw))
+            "auth.response" -> Message.AuthResponse(payload(raw))
+            "auth.ok" -> Message.AuthOK
             else -> Message.Unknown(raw.type)
         }
         return InboundEnvelope(id = raw.id, replyTo = raw.replyTo, message = message)

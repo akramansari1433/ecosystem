@@ -19,10 +19,8 @@
 		472EEEB6FD9298D0887404CA /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003CE1F6634354A0762DDD21 /* AppState.swift */; };
 		547D6FCAB699B4F26D4A6930 /* ProtocolCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB4392E8CF7B22E8AEF48CBD /* ProtocolCodecTests.swift */; };
 		598657EB28FC92DBB8022B4C /* MirrorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C5509329948F276C59FB9F /* MirrorSession.swift */; };
-		59AF1500E6048D0AEFAA8C1D /* X509 in Frameworks */ = {isa = PBXBuildFile; productRef = 7F3F3E4FB094787EAC4672A3 /* X509 */; };
 		83E657C190655288EABE6A26 /* BinaryFramesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785ED431DE6E4B40980418A1 /* BinaryFramesTests.swift */; };
 		85BAF2A7EA79BCA1FD10F76B /* ConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC65AADAEA421ABDBB56F40D /* ConnectionManager.swift */; };
-		8E4840E94FB4C22A09E61F13 /* IdentityStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23B6D0C5FE83238CD54075C5 /* IdentityStoreTests.swift */; };
 		99FB15E12A450DFF0BA27FC6 /* Identity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C90C4DDE6E434D78F959671 /* Identity.swift */; };
 		9E3EB6473A55FFDB3FDB0868 /* PairingCodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD47517E3BFBECCB89FFB7EA /* PairingCodeTests.swift */; };
 		A25373137800201449090B82 /* MirrorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */; };
@@ -52,7 +50,6 @@
 		11CF5F43399FCC116148D667 /* FrameReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameReader.swift; sourceTree = "<group>"; };
 		149B418FD7D5021324F0B77A /* DeviceBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceBrowser.swift; sourceTree = "<group>"; };
 		1EEFCBBACFFCC5E8341B2614 /* PairingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingEngine.swift; sourceTree = "<group>"; };
-		23B6D0C5FE83238CD54075C5 /* IdentityStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityStoreTests.swift; sourceTree = "<group>"; };
 		264E91AA7C2D9DDB60797974 /* MenuContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuContent.swift; sourceTree = "<group>"; };
 		4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamConnection.swift; sourceTree = "<group>"; };
 		4F97B7789670B31B8A473C61 /* EcosystemApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EcosystemApp.swift; sourceTree = "<group>"; };
@@ -79,17 +76,6 @@
 		F04E1941B706ADDDE5DC146E /* BinaryFrames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryFrames.swift; sourceTree = "<group>"; };
 		F090A46118396020E3CD41FD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		705B091990D92264D7FA25DF /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				59AF1500E6048D0AEFAA8C1D /* X509 in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		030488436DC9A7FFFDB23551 /* FileBrowser */ = {
@@ -165,7 +151,6 @@
 			children = (
 				785ED431DE6E4B40980418A1 /* BinaryFramesTests.swift */,
 				65016B6F0072803375AD145C /* FrameReaderTests.swift */,
-				23B6D0C5FE83238CD54075C5 /* IdentityStoreTests.swift */,
 				CD47517E3BFBECCB89FFB7EA /* PairingCodeTests.swift */,
 				B913F56A50D0B2DE8FF2F364 /* PairingEngineTests.swift */,
 				93F6D2166A6D3B4BA1BA4C14 /* PlaceholderTests.swift */,
@@ -218,7 +203,6 @@
 			buildConfigurationList = BF3F23238EC5DCBAEB8C6403 /* Build configuration list for PBXNativeTarget "Ecosystem" */;
 			buildPhases = (
 				6EF6DCC1D87D2A7BE444D77D /* Sources */,
-				705B091990D92264D7FA25DF /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -226,7 +210,6 @@
 			);
 			name = Ecosystem;
 			packageProductDependencies = (
-				7F3F3E4FB094787EAC4672A3 /* X509 */,
 			);
 			productName = Ecosystem;
 			productReference = E4AA591F1984F9E8B603F527 /* Ecosystem.app */;
@@ -258,9 +241,6 @@
 			);
 			mainGroup = 557906742F2280F9FA8D0859;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				64BCC64C49A005D5C8D60BD0 /* XCRemoteSwiftPackageReference "swift-certificates" */,
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5E79D888D59D091F9EF48A9D /* Products */;
 			projectDirPath = "";
@@ -306,7 +286,6 @@
 			files = (
 				83E657C190655288EABE6A26 /* BinaryFramesTests.swift in Sources */,
 				D01D0DD90D4DC3E58AD9FA28 /* FrameReaderTests.swift in Sources */,
-				8E4840E94FB4C22A09E61F13 /* IdentityStoreTests.swift in Sources */,
 				9E3EB6473A55FFDB3FDB0868 /* PairingCodeTests.swift in Sources */,
 				DF621F4FF2BDA035EFD3C7E5 /* PairingEngineTests.swift in Sources */,
 				DBFDB1BFD41EFF0448526FD4 /* PlaceholderTests.swift in Sources */,
@@ -545,25 +524,6 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		64BCC64C49A005D5C8D60BD0 /* XCRemoteSwiftPackageReference "swift-certificates" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-certificates";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		7F3F3E4FB094787EAC4672A3 /* X509 */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 64BCC64C49A005D5C8D60BD0 /* XCRemoteSwiftPackageReference "swift-certificates" */;
-			productName = X509;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 79CE8FDC44B8B71B011C09C3 /* Project object */;
 }

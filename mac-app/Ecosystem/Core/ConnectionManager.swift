@@ -1,3 +1,5 @@
+import AppKit
+import CryptoKit
 import Foundation
 import Network
 import Observation
@@ -5,35 +7,40 @@ import os
 
 private let log = Logger(subsystem: "com.akram.ecosystem", category: "manager")
 
-/// Orchestrates discovery → connection → hello → pairing → steady state,
-/// and reconnects with backoff. Drives all `AppState` updates.
+/// Orchestrates discovery → connection → hello → auth/pairing → steady state,
+/// and keeps the link alive across sleep, Wi-Fi changes and going out of range.
 @MainActor
 final class ConnectionManager {
     private let appState: AppState
     private let browser = DeviceBrowser()
-    private var identity: IdentityStore?
-    private var secIdentity: SendableIdentity?
     private var connection: ControlConnection?
     private var pairingEngine: PairingEngine?
+    private var pairingNonce: Data?
     private var currentPeerDER: Data?
     private var devices: [DeviceBrowser.Device] = []
     private var deviceRotation = 0
     private var reconnectAttempt = 0
     private var connectTask: Task<Void, Never>?
+    private var activeDevice: DeviceBrowser.Device?
+    private var watchdog: Timer?
 
     private let clipboard = ClipboardSync()
     private var pendingReplies: [String: CheckedContinuation<InboundEnvelope, Error>] = [:]
     private(set) lazy var files = FileBrowserModel(manager: self)
     private(set) lazy var mirror = MirrorSession(manager: self)
 
-    enum RequestError: Error {
+    enum RequestError: LocalizedError {
         case notConnected
         case timeout
         case remote(String)
-    }
 
-    private var pairedPeerURL: URL {
-        IdentityStore.defaultDirectory.appendingPathComponent("paired-peer.der")
+        var errorDescription: String? {
+            switch self {
+            case .notConnected: "Not connected to the phone"
+            case .timeout: "The phone didn't respond"
+            case .remote(let message): message
+            }
+        }
     }
 
     init(appState: AppState) {
@@ -41,17 +48,8 @@ final class ConnectionManager {
     }
 
     func start() {
-        do {
-            let identity = try IdentityStore.loadOrCreate()
-            self.identity = identity
-            self.secIdentity = SendableIdentity(
-                identity: try KeychainIdentity.secIdentity(
-                    for: identity, directory: IdentityStore.defaultDirectory))
-        } catch {
-            appState.status = .error("Identity setup failed: \(error.localizedDescription)")
-            return
-        }
-        appState.paired = FileManager.default.fileExists(atPath: pairedPeerURL.path)
+        PairingStore.removeLegacyKeychains()
+        appState.paired = PairingStore.isPaired
         appState.status = .searching
         clipboard.onLocalCopy = { [weak self] payload in
             self?.send(.clipboardSet(payload))
@@ -60,6 +58,53 @@ final class ConnectionManager {
         browser.onDevicesChanged = { [weak self] devices in
             self?.devicesChanged(devices)
         }
+        browser.onNeedsRestart = { [weak self] in
+            self?.restartBrowser(reason: "browser failed")
+        }
+        browser.start()
+        observeWake()
+        startWatchdog()
+    }
+
+    // MARK: staying connected
+
+    /// NWBrowser dies silently when the network changes underneath it, and a
+    /// connection can be half-open after sleep. Re-check every 15 s.
+    private func startWatchdog() {
+        watchdog?.invalidate()
+        let timer = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.watchdogTick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        watchdog = timer
+    }
+
+    private func watchdogTick() {
+        guard connection == nil else { return }
+        if devices.isEmpty {
+            restartBrowser(reason: "no devices seen")
+        } else if connectTask == nil {
+            log.info("watchdog: retrying connection")
+            connect(to: devices[deviceRotation % devices.count])
+        }
+    }
+
+    private func observeWake() {
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didWakeNotification,
+                     NSWorkspace.sessionDidBecomeActiveNotification] {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.restartBrowser(reason: "system wake")
+                }
+            }
+        }
+    }
+
+    private func restartBrowser(reason: String) {
+        log.info("restarting discovery (\(reason, privacy: .public))")
+        devices = []
+        reconnectAttempt = 0
         browser.start()
     }
 
@@ -67,53 +112,44 @@ final class ConnectionManager {
         devices = found
         appState.discoveredPhone = found.first?.name
         guard let device = found.first else { return }
-        if connection == nil {
+        if connection == nil && connectTask == nil {
             connect(to: device)
         }
     }
 
-    private var activeDevice: DeviceBrowser.Device?
-
-    /// Opens a stream connection to the currently connected phone (paired only).
-    func openStream() throws -> StreamConnection {
-        guard let secIdentity, let activeDevice,
-              let pinned = try? Data(contentsOf: pairedPeerURL) else {
-            throw RequestError.notConnected
-        }
-        return StreamConnection(
-            endpoint: activeDevice.endpoint, identity: secIdentity, pinnedPeerDER: pinned)
-    }
-
     private func connect(to device: DeviceBrowser.Device) {
-        guard let secIdentity else { return }
-        KeychainIdentity.ensureUnlocked()
         activeDevice = device
-        let pinned = try? Data(contentsOf: pairedPeerURL)
-        log.info("connecting to \(device.name, privacy: .public) (pinned: \(pinned != nil))")
-        let conn = ControlConnection(
-            endpoint: device.endpoint, identity: secIdentity, pinnedPeerDER: pinned)
+        let pinned = PairingStore.pinnedPeerCertificate
+        log.info("connecting to \(device.name, privacy: .public) (paired: \(pinned != nil))")
+        let conn = ControlConnection(endpoint: device.endpoint, pinnedPeerDER: pinned)
         connection = conn
         connectTask = Task { [weak self] in
             let events = await conn.start()
             for await event in events {
-                await self?.handle(event: event, from: conn, device: device)
+                await self?.handle(event: event, from: conn)
             }
+            await MainActor.run { self?.connectTask = nil }
         }
     }
 
-    private func handle(
-        event: ControlConnection.Event, from conn: ControlConnection,
-        device: DeviceBrowser.Device
-    ) async {
+    /// Opens a stream connection to the connected phone (paired only).
+    func openStream() throws -> StreamConnection {
+        guard let activeDevice, let pinned = PairingStore.pinnedPeerCertificate else {
+            throw RequestError.notConnected
+        }
+        return StreamConnection(endpoint: activeDevice.endpoint, pinnedPeerDER: pinned)
+    }
+
+    private func handle(event: ControlConnection.Event, from conn: ControlConnection) async {
         switch event {
         case .ready(let peerDER):
             currentPeerDER = peerDER
             reconnectAttempt = 0
             try? await conn.send(.hello(HelloPayload(
-                capabilities: ["clipboard", "ring"],
+                capabilities: ["clipboard", "ring", "fs", "mirror", "input"],
                 deviceId: Self.deviceId,
                 name: Host.current().localizedName ?? "Mac",
-                protocolVersion: 1)))
+                protocolVersion: 2)))
 
         case .message(let envelope):
             await handleMessage(envelope, conn: conn)
@@ -128,7 +164,7 @@ final class ConnectionManager {
             pairingEngine = nil
             appState.connected = false
             appState.pairingCode = nil
-            appState.status = appState.paired ? .searching : .searching
+            appState.status = .searching
             scheduleReconnect()
         }
     }
@@ -143,8 +179,7 @@ final class ConnectionManager {
                 do {
                     try await connection.send(message, id: id)
                 } catch {
-                    self.pendingReplies.removeValue(forKey: id)?
-                        .resume(throwing: error)
+                    self.pendingReplies.removeValue(forKey: id)?.resume(throwing: error)
                 }
             }
             Task {
@@ -167,16 +202,32 @@ final class ConnectionManager {
         }
         switch envelope.message {
         case .hello(let hello):
-            guard hello.protocolVersion == 1 else {
-                try? await conn.send(.error(.init(code: "version_mismatch", message: nil)))
+            guard hello.protocolVersion == 2 else {
+                appState.status = .error("Update the phone app — protocol mismatch")
                 await conn.close()
                 return
             }
-            appState.connected = true
             appState.phoneName = hello.name
-            appState.status = appState.paired
-                ? .connected(hello.name)
-                : .foundUnpaired(hello.name)
+            if PairingStore.isPaired {
+                appState.status = .connected(hello.name)   // confirmed once auth.ok lands
+            } else {
+                appState.status = .foundUnpaired(hello.name)
+            }
+
+        case .authChallenge(let challenge):
+            guard let secret = PairingStore.sharedSecret,
+                  let nonce = Data(hex: challenge.nonce) else {
+                appState.status = .error("Pairing data missing — pair again")
+                return
+            }
+            try? await conn.send(.authResponse(.init(
+                mac: PairingStore.authResponse(nonce: nonce, secret: secret))),
+                replyTo: envelope.id)
+
+        case .authOK:
+            appState.connected = true
+            if let name = appState.phoneName { appState.status = .connected(name) }
+            log.info("authenticated")
 
         case .ping:
             try? await conn.send(.pong, replyTo: envelope.id)
@@ -192,7 +243,6 @@ final class ConnectionManager {
                 pairingEngine?.handle(.receivedAbort(reason: payload.reason)) ?? [], conn: conn)
 
         case .clipboardSet(let payload):
-            log.info("clipboard.set received (\(payload.text.count) chars); applying")
             clipboard.applyRemote(payload)
 
         case .ringStopped:
@@ -206,12 +256,18 @@ final class ConnectionManager {
         }
     }
 
-    // MARK: pairing (user actions from UI)
+    // MARK: pairing
 
     func startPairing() {
-        guard let identity, let currentPeerDER, let connection else { return }
-        let engine = PairingEngine(
-            role: .initiator, ownDer: identity.certificateDER, peerDer: currentPeerDER)
+        guard let currentPeerDER, let connection else { return }
+        // A fresh nonce identifies this Mac and seeds the shared secret; the
+        // 6-digit code covers both it and the phone's certificate.
+        var nonce = Data(count: 32)
+        _ = nonce.withUnsafeMutableBytes {
+            SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!)
+        }
+        pairingNonce = nonce
+        let engine = PairingEngine(role: .initiator, ownDer: nonce, peerDer: currentPeerDER)
         pairingEngine = engine
         appState.status = .pairing
         Task { await runPairingEffects(engine.handle(.start), conn: connection) }
@@ -233,23 +289,30 @@ final class ConnectionManager {
         for effect in effects {
             switch effect {
             case .send(let message):
-                try? await conn.send(message)
+                // The nonce travels as the pair.request "fingerprint" field.
+                if case .pairRequest = message, let nonce = pairingNonce {
+                    try? await conn.send(.pairRequest(.init(certFingerprint: nonce.hexString)))
+                } else {
+                    try? await conn.send(message)
+                }
             case .displayCode(let code):
                 appState.pairingCode = code
             case .persistPeerCert:
-                if let currentPeerDER {
-                    try? FileManager.default.createDirectory(
-                        at: IdentityStore.defaultDirectory, withIntermediateDirectories: true)
-                    try? currentPeerDER.write(to: pairedPeerURL)
+                if let currentPeerDER, let nonce = pairingNonce {
+                    try? PairingStore.save(
+                        peerCertificate: currentPeerDER,
+                        secret: PairingStore.deriveSecret(
+                            nonce: nonce, peerCertificate: currentPeerDER))
                 }
             case .complete:
                 appState.paired = true
                 appState.pairingCode = nil
                 appState.status = .searching
-                // Phone drops the connection; we reconnect in pinned mode.
+                pairingNonce = nil
             case .fail(let reason):
                 appState.pairingCode = nil
                 appState.status = .error("Pairing failed: \(reason)")
+                pairingNonce = nil
             case .showAcceptPrompt:
                 break // responder-only
             }
@@ -257,7 +320,7 @@ final class ConnectionManager {
     }
 
     func unpair() {
-        try? FileManager.default.removeItem(at: pairedPeerURL)
+        PairingStore.clear()
         appState.paired = false
         Task { await connection?.close() }
     }
@@ -280,13 +343,14 @@ final class ConnectionManager {
     }
 
     private func scheduleReconnect() {
-        let delay = min(30.0, pow(2.0, Double(reconnectAttempt)))
+        let delay = min(20.0, pow(1.7, Double(reconnectAttempt)))
         reconnectAttempt += 1
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
-            guard let self, self.connection == nil, !self.devices.isEmpty else { return }
-            // Rotate through discovered records: after a phone app restart a stale
-            // duplicate can linger in mDNS caches for a couple of minutes.
+            guard let self, self.connection == nil, self.connectTask == nil,
+                  !self.devices.isEmpty else { return }
+            // Rotate through discovered records: a stale duplicate can linger in
+            // mDNS caches after the phone app restarts.
             self.deviceRotation += 1
             self.connect(to: self.devices[self.deviceRotation % self.devices.count])
         }

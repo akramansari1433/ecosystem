@@ -59,12 +59,9 @@ class TlsServer(identity: Identity, pinProvider: () -> ByteArray?) {
     /** Bound on an ephemeral port; read the port from [SSLServerSocket.getLocalPort]. */
     fun listen(): SSLServerSocket =
         (context.serverSocketFactory.createServerSocket(0) as SSLServerSocket).apply {
-            needClientAuth = true
+            // No client certificate: the Mac proves itself with an HMAC
+            // challenge-response instead (see PairingSecret).
+            needClientAuth = false
+            wantClientAuth = false
         }
-
-    companion object {
-        /** The peer's leaf certificate DER for an accepted, handshaken socket. */
-        fun peerDer(socket: SSLSocket): ByteArray =
-            (socket.session.peerCertificates.first() as X509Certificate).encoded
-    }
 }
