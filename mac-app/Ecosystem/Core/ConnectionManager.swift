@@ -1,6 +1,9 @@
 import Foundation
 import Network
 import Observation
+import os
+
+private let log = Logger(subsystem: "com.akram.ecosystem", category: "manager")
 
 /// Orchestrates discovery → connection → hello → pairing → steady state,
 /// and reconnects with backoff. Drives all `AppState` updates.
@@ -13,7 +16,8 @@ final class ConnectionManager {
     private var connection: ControlConnection?
     private var pairingEngine: PairingEngine?
     private var currentPeerDER: Data?
-    private var currentDevice: DeviceBrowser.Device?
+    private var devices: [DeviceBrowser.Device] = []
+    private var deviceRotation = 0
     private var reconnectAttempt = 0
     private var connectTask: Task<Void, Never>?
 
@@ -50,10 +54,10 @@ final class ConnectionManager {
         browser.start()
     }
 
-    private func devicesChanged(_ devices: [DeviceBrowser.Device]) {
-        appState.discoveredPhone = devices.first?.name
-        guard let device = devices.first else { return }
-        currentDevice = device
+    private func devicesChanged(_ found: [DeviceBrowser.Device]) {
+        devices = found
+        appState.discoveredPhone = found.first?.name
+        guard let device = found.first else { return }
         if connection == nil {
             connect(to: device)
         }
@@ -62,6 +66,7 @@ final class ConnectionManager {
     private func connect(to device: DeviceBrowser.Device) {
         guard let secIdentity else { return }
         let pinned = try? Data(contentsOf: pairedPeerURL)
+        log.info("connecting to \(device.name, privacy: .public) (pinned: \(pinned != nil))")
         let conn = ControlConnection(
             endpoint: device.endpoint, identity: secIdentity, pinnedPeerDER: pinned)
         connection = conn
@@ -91,6 +96,7 @@ final class ConnectionManager {
             await handleMessage(envelope, conn: conn)
 
         case .closed:
+            log.info("connection closed; scheduling reconnect")
             connection = nil
             pairingEngine = nil
             appState.connected = false
@@ -216,10 +222,11 @@ final class ConnectionManager {
         reconnectAttempt += 1
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
-            guard let self, self.connection == nil else { return }
-            if let device = self.currentDevice {
-                self.connect(to: device)
-            }
+            guard let self, self.connection == nil, !self.devices.isEmpty else { return }
+            // Rotate through discovered records: after a phone app restart a stale
+            // duplicate can linger in mDNS caches for a couple of minutes.
+            self.deviceRotation += 1
+            self.connect(to: self.devices[self.deviceRotation % self.devices.count])
         }
     }
 

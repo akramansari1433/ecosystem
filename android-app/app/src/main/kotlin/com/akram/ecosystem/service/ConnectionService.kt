@@ -141,9 +141,13 @@ class ConnectionService : Service() {
                 Log.i(TAG, "listening on ${server.localPort}")
                 while (true) {
                     val socket = server.accept() as SSLSocket
-                    runCatching { socket.startHandshake() }
-                        .onFailure { Log.w(TAG, "handshake failed: $it"); socket.close() }
-                        .onSuccess { handleConnection(socket) }
+                    // Handle concurrently: a stale session (e.g. the Mac app was
+                    // killed mid-connection) must never block new connections.
+                    scope.launch {
+                        runCatching { socket.startHandshake() }
+                            .onFailure { Log.w(TAG, "handshake failed: $it"); socket.close() }
+                            .onSuccess { handleConnection(socket) }
+                    }
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "server loop error", t)
@@ -155,6 +159,11 @@ class ConnectionService : Service() {
     /** Runs one control connection to completion (blocking in IO dispatcher). */
     private fun handleConnection(socket: SSLSocket) {
         val peerDer = TlsServer.peerDer(socket)
+        // The newest connection wins: drop any previous (likely stale) session.
+        session?.close()
+        // Dead-peer watchdog: the Mac pings every 10 s; 35 s of silence means the
+        // connection is gone even if TCP never noticed (Wi-Fi drop, app killed).
+        socket.soTimeout = 35_000
         val s = Session(socket)
         session = s
         if (!pairedPeerFile.exists()) {
@@ -179,11 +188,15 @@ class ConnectionService : Service() {
             Log.w(TAG, "connection ended: $t")
         } finally {
             runCatching { socket.close() }
-            session = null
-            pairingEngine = null
-            _state.value = _state.value.copy(
-                connected = false, peerName = null, pairing = null)
-            updateNotification("Waiting for your Mac…")
+            // Only clear state if WE are still the active session — a newer
+            // connection may already have replaced this one.
+            if (session === s) {
+                session = null
+                pairingEngine = null
+                _state.value = _state.value.copy(
+                    connected = false, peerName = null, pairing = null)
+                updateNotification("Waiting for your Mac…")
+            }
         }
     }
 

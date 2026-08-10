@@ -1,6 +1,9 @@
 import Foundation
 import Network
+import os
 import Security
+
+private let log = Logger(subsystem: "com.akram.ecosystem", category: "connection")
 
 /// `SecIdentity` is a thread-safe CF type, but not marked Sendable; this wrapper
 /// lets it cross actor boundaries.
@@ -44,6 +47,7 @@ actor ControlConnection {
     private var pingTask: Task<Void, Never>?
     private var lastReceived = Date()
     private var closed = false
+    private var isReady = false
 
     init(endpoint: NWEndpoint, identity: SendableIdentity, pinnedPeerDER: Data?) {
         let tls = NWProtocolTLS.Options()
@@ -84,7 +88,20 @@ actor ControlConnection {
             Task { await self.handleState(state) }
         }
         connection.start(queue: DispatchQueue(label: "ecosystem.connection"))
+        // Connect timeout: a dial to a stale Bonjour record can sit in .preparing
+        // forever; give up so the manager can rotate to another discovered record.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            await self?.abandonIfNotReady()
+        }
         return stream
+    }
+
+    private func abandonIfNotReady() {
+        if !isReady && !closed {
+            log.info("connect timeout; abandoning")
+            finish()
+        }
     }
 
     func send(_ message: Message, replyTo: String? = nil) throws {
@@ -98,8 +115,10 @@ actor ControlConnection {
     }
 
     private func handleState(_ state: NWConnection.State) {
+        log.info("connection state: \(String(describing: state), privacy: .public)")
         switch state {
         case .ready:
+            isReady = true
             if let der = capture.value {
                 continuation?.yield(.ready(peerDER: der))
             }

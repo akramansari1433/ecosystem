@@ -91,8 +91,13 @@ enum KeychainIdentity {
             nil, store.certificateDER as CFData) else {
             throw KeychainIdentityError.badCertificate
         }
+        // v2: keys are imported with an any-application ACL (see permissiveAccess).
+        // v1 keychains ACL-locked the key to one build's code signature, so every
+        // rebuilt ad-hoc binary triggered a keychain password prompt.
+        try? FileManager.default.removeItem(
+            at: directory.appendingPathComponent("ecosystem.keychain-db"))
         let keychain = try openOrCreateKeychain(
-            at: directory.appendingPathComponent("ecosystem.keychain-db").path)
+            at: directory.appendingPathComponent("ecosystem-v2.keychain-db").path)
 
         // Fast path: key + cert already imported on an earlier launch.
         var identity: SecIdentity?
@@ -101,15 +106,19 @@ enum KeychainIdentity {
             return identity
         }
 
+        let access = try permissiveAccess()
         var params = SecItemImportExportKeyParameters()
         params.version = UInt32(SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION)
+        params.accessRef = Unmanaged.passUnretained(access)
         var keyFormat = SecExternalFormat.formatOpenSSL
         var keyType = SecExternalItemType.itemTypePrivateKey
         let sec1 = sec1DER(
             privateRaw: store.privateKey.rawRepresentation,
             publicX963: store.privateKey.publicKey.x963Representation)
-        let keyStatus = SecItemImport(
-            sec1 as CFData, nil, &keyFormat, &keyType, [], &params, keychain, nil)
+        let keyStatus = withExtendedLifetime(access) {
+            SecItemImport(
+                sec1 as CFData, nil, &keyFormat, &keyType, [], &params, keychain, nil)
+        }
         guard keyStatus == errSecSuccess || keyStatus == errSecDuplicateItem else {
             throw KeychainIdentityError.importFailed(keyStatus)
         }
@@ -128,6 +137,35 @@ enum KeychainIdentity {
             throw KeychainIdentityError.identityCreationFailed(status)
         }
         return identity
+    }
+
+    /// An access object whose ACLs trust ANY application with no passphrase prompt.
+    /// Rebuilt ad-hoc binaries have a new code signature, so a default ACL would
+    /// prompt for the keychain password after every build. The private key already
+    /// lives unencrypted in a 0600 file beside the keychain, so an open item ACL
+    /// does not weaken anything.
+    private static func permissiveAccess() throws -> SecAccess {
+        var access: SecAccess?
+        let status = SecAccessCreate("Ecosystem identity key" as CFString, nil, &access)
+        guard status == errSecSuccess, let access else {
+            throw KeychainIdentityError.importFailed(status)
+        }
+        var aclList: CFArray?
+        if SecAccessCopyACLList(access, &aclList) == errSecSuccess,
+           let acls = aclList as? [SecACL] {
+            for acl in acls {
+                var appList: CFArray?
+                var description: CFString?
+                var prompt = SecKeychainPromptSelector()
+                guard SecACLCopyContents(acl, &appList, &description, &prompt)
+                    == errSecSuccess else { continue }
+                // NULL application list = trust every application; empty prompt
+                // selector = never require the keychain passphrase.
+                SecACLSetContents(acl, nil, description ?? "" as CFString,
+                                  SecKeychainPromptSelector())
+            }
+        }
+        return access
     }
 
     private static func openOrCreateKeychain(at path: String) throws -> SecKeychain {
