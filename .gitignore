@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# Android / Gradle
+.gradle/
+android-app/local.properties
+android-app/**/build/
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+
+# Secrets / identity material (never commit)
+*.p12
+*.keystore
+*.jks
