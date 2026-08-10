@@ -37,4 +37,19 @@ struct IdentityStoreTests {
         let signature = try identity.privateKey.signature(for: message)
         #expect(identity.privateKey.publicKey.isValidSignature(signature, for: message))
     }
+
+    @Test func keychainIdentityIsCreatedAndIdempotent() throws {
+        // Regression: SecItemAdd(kSecClassKey…) fails with -34018 for ad-hoc-signed
+        // apps; the dedicated-keychain + SEC1 SecItemImport path must work instead.
+        let dir = try tempDir()
+        let store = try IdentityStore.loadOrCreate(directory: dir)
+        let first = try KeychainIdentity.secIdentity(for: store, directory: dir)
+
+        var key: SecKey?
+        #expect(SecIdentityCopyPrivateKey(first, &key) == errSecSuccess)
+        #expect(key != nil)
+
+        // Second call takes the fast path (already imported) and must also succeed.
+        _ = try KeychainIdentity.secIdentity(for: store, directory: dir)
+    }
 }

@@ -32,7 +32,8 @@ final class ConnectionManager {
             let identity = try IdentityStore.loadOrCreate()
             self.identity = identity
             self.secIdentity = SendableIdentity(
-                identity: try KeychainIdentity.secIdentity(for: identity))
+                identity: try KeychainIdentity.secIdentity(
+                    for: identity, directory: IdentityStore.defaultDirectory))
         } catch {
             appState.status = .error("Identity setup failed: \(error.localizedDescription)")
             return
