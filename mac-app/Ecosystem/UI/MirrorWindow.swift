@@ -41,11 +41,28 @@ private final class MirrorInputView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        window?.backgroundColor = .black
         // Take focus so typing goes to the phone without an extra click.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.window?.makeFirstResponder(self)
         }
+    }
+
+    /// Locks the window to the phone's aspect ratio so the video fills it
+    /// completely — no letterbox bars on any edge.
+    func applyAspectRatio(_ size: CGSize) {
+        guard let window, size.width > 0, size.height > 0 else { return }
+        let ratio = NSSize(width: size.width, height: size.height)
+        guard window.contentAspectRatio != ratio else { return }
+        window.contentAspectRatio = ratio
+        var frame = window.frame
+        let chrome = frame.height - window.contentLayoutRect.height
+        let contentWidth = window.contentLayoutRect.width
+        let targetHeight = contentWidth * size.height / size.width + chrome
+        frame.origin.y += frame.height - targetHeight
+        frame.size.height = targetHeight
+        window.setFrame(frame, display: true, animate: false)
     }
 
     /// Mac keyboard → phone. Printable text is typed into the focused field;
@@ -133,7 +150,9 @@ private struct MirrorSurface: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? MirrorInputView)?.applyAspectRatio(session.videoSize)
+    }
 }
 
 struct MirrorWindow: View {
@@ -141,24 +160,32 @@ struct MirrorWindow: View {
     let session: MirrorSession
 
     var body: some View {
-        VStack(spacing: 0) {
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if session.phase == .streaming {
-                navigationBar
-                    .padding(.vertical, 10)
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.black)
+            .ignoresSafeArea()
+            .onDisappear { session.stop() }
+            .toolbar {
+                if session.phase == .streaming {
+                    ToolbarItemGroup {
+                        Button("Back", systemImage: "chevron.backward") {
+                            session.pressKey("back")
+                        }
+                        .help("Back (esc)")
+                        Button("Home", systemImage: "circle") { session.pressKey("home") }
+                        Button("Recents", systemImage: "square.on.square") {
+                            session.pressKey("recents")
+                        }
+                    }
+                }
+                ToolbarItem {
+                    if session.isActive {
+                        Button("Stop", systemImage: "stop.circle") { session.stop() }
+                    } else {
+                        Button("Start", systemImage: "play.circle") { session.start() }
+                    }
+                }
             }
-        }
-        .frame(minWidth: 300, minHeight: 480)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .onDisappear { session.stop() }
-        .toolbar {
-            if session.isActive {
-                Button("Stop", systemImage: "stop.circle") { session.stop() }
-            } else {
-                Button("Start", systemImage: "play.circle") { session.start() }
-            }
-        }
     }
 
     @ViewBuilder
@@ -177,8 +204,9 @@ struct MirrorWindow: View {
                     .multilineTextAlignment(.center)
             }
         case .streaming:
+            // No aspectRatio modifier: the window itself is locked to the phone's
+            // ratio, so the video fills every pixel of the content area.
             MirrorSurface(session: session)
-                .aspectRatio(session.videoSize, contentMode: .fit)
         case .failed(let reason):
             ContentUnavailableView(
                 "Mirroring failed", systemImage: "exclamationmark.triangle",
@@ -186,31 +214,4 @@ struct MirrorWindow: View {
         }
     }
 
-    private var navigationBar: some View {
-        HStack(spacing: 26) {
-            NavButton(icon: "chevron.backward", label: "Back (esc)") {
-                session.pressKey("back")
-            }
-            NavButton(icon: "circle", label: "Home") { session.pressKey("home") }
-            NavButton(icon: "square.on.square", label: "Recent apps") {
-                session.pressKey("recents")
-            }
-        }
-    }
-}
-
-private struct NavButton: View {
-    let icon: String
-    let label: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
-                .frame(width: 40, height: 28)
-        }
-        .buttonStyle(.bordered)
-        .help(label)
-    }
 }

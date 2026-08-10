@@ -101,7 +101,12 @@ final class ConnectionManager {
         }
     }
 
+    private var lastBrowserRestart = Date.distantPast
+
     private func restartBrowser(reason: String) {
+        // Rate-limit: several triggers (wake, watchdog, failure) can fire at once.
+        guard Date().timeIntervalSince(lastBrowserRestart) > 10 else { return }
+        lastBrowserRestart = Date()
         log.info("restarting discovery (\(reason, privacy: .public))")
         devices = []
         reconnectAttempt = 0

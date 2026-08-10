@@ -19,19 +19,18 @@ final class DeviceBrowser {
     private var browser: NWBrowser?
 
     func start() {
+        browser?.stateUpdateHandler = nil   // its cancel must not look like a failure
         stop()
         let browser = NWBrowser(
             for: .bonjour(type: "_ecosys._tcp", domain: nil), using: .init())
         browser.stateUpdateHandler = { [weak self] state in
             log.info("browser state: \(String(describing: state), privacy: .public)")
-            switch state {
-            case .failed, .cancelled:
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .seconds(2))
-                    self?.onNeedsRestart?()
-                }
-            default:
-                break
+            // Only a genuine failure warrants a restart. `.cancelled` is what our
+            // own stop() produces — restarting on it loops forever.
+            guard case .failed = state else { return }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                self?.onNeedsRestart?()
             }
         }
         browser.browseResultsChangedHandler = { [weak self] results, _ in
