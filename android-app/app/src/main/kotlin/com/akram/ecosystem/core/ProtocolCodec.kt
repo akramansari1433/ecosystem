@@ -53,6 +53,9 @@ object ProtocolCodec {
             is Message.MirrorStart -> json.encodeToJsonElement(message.payload)
             is Message.MirrorStarted -> json.encodeToJsonElement(message.payload)
             is Message.MirrorRotated -> json.encodeToJsonElement(message.payload)
+            is Message.InputTap -> json.encodeToJsonElement(message.payload)
+            is Message.InputSwipe -> json.encodeToJsonElement(message.payload)
+            is Message.InputKey -> json.encodeToJsonElement(message.payload)
             else -> null
         }
         val body = json.encodeToString(
@@ -95,6 +98,9 @@ object ProtocolCodec {
             "mirror.started" -> Message.MirrorStarted(payload(raw))
             "mirror.stop" -> Message.MirrorStop
             "mirror.rotated" -> Message.MirrorRotated(payload(raw))
+            "input.tap" -> Message.InputTap(payload(raw))
+            "input.swipe" -> Message.InputSwipe(payload(raw))
+            "input.key" -> Message.InputKey(payload(raw))
             else -> Message.Unknown(raw.type)
         }
         return InboundEnvelope(id = raw.id, replyTo = raw.replyTo, message = message)

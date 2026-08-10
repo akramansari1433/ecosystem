@@ -97,6 +97,24 @@ struct MirrorRotatedPayload: Codable, Equatable {
     let width: Int
 }
 
+struct InputTapPayload: Codable, Equatable {
+    let longPress: Bool
+    let x: Double
+    let y: Double
+}
+
+struct InputSwipePayload: Codable, Equatable {
+    let durationMs: Int
+    let x1: Double
+    let x2: Double
+    let y1: Double
+    let y2: Double
+}
+
+struct InputKeyPayload: Codable, Equatable {
+    let key: String
+}
+
 struct FsTransferResultPayload: Codable, Equatable {
     let message: String?
     let ok: Bool
@@ -133,6 +151,9 @@ enum Message: Equatable {
     case mirrorStarted(MirrorStartedPayload)
     case mirrorStop
     case mirrorRotated(MirrorRotatedPayload)
+    case inputTap(InputTapPayload)
+    case inputSwipe(InputSwipePayload)
+    case inputKey(InputKeyPayload)
     case unknown(String)
 
     var typeString: String {
@@ -165,6 +186,9 @@ enum Message: Equatable {
         case .mirrorStarted: "mirror.started"
         case .mirrorStop: "mirror.stop"
         case .mirrorRotated: "mirror.rotated"
+        case .inputTap: "input.tap"
+        case .inputSwipe: "input.swipe"
+        case .inputKey: "input.key"
         case .unknown(let type): type
         }
     }

@@ -36,6 +36,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         Log.i(TAG, "accessibility service connected")
+        RemoteInput.service = this
         clipboard = getSystemService(ClipboardManager::class.java).also {
             it.addPrimaryClipChangedListener(listener)
         }
@@ -109,6 +110,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         clipboard?.removePrimaryClipChangedListener(listener)
         removeOverlay()
+        if (RemoteInput.service === this) RemoteInput.service = null
         super.onDestroy()
     }
 

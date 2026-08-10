@@ -119,6 +119,30 @@ data class MirrorRotatedPayload(
     val width: Int,
 )
 
+// Input coordinates are normalized 0..1 relative to the screen, so they're
+// independent of resolution and rotation. See docs/protocol.md §12.
+@Serializable
+data class InputTapPayload(
+    val longPress: Boolean = false,
+    val x: Double,
+    val y: Double,
+)
+
+@Serializable
+data class InputSwipePayload(
+    val durationMs: Int,
+    val x1: Double,
+    val x2: Double,
+    val y1: Double,
+    val y2: Double,
+)
+
+@Serializable
+data class InputKeyPayload(
+    /** "back", "home", "recents", "power", "notifications". */
+    val key: String,
+)
+
 @Serializable
 data class FsTransferResultPayload(
     val message: String? = null,
@@ -156,6 +180,9 @@ sealed interface Message {
     data class MirrorStarted(val payload: MirrorStartedPayload) : Message
     data object MirrorStop : Message
     data class MirrorRotated(val payload: MirrorRotatedPayload) : Message
+    data class InputTap(val payload: InputTapPayload) : Message
+    data class InputSwipe(val payload: InputSwipePayload) : Message
+    data class InputKey(val payload: InputKeyPayload) : Message
     data class Unknown(val type: String) : Message
 
     val typeString: String
@@ -188,6 +215,9 @@ sealed interface Message {
             is MirrorStarted -> "mirror.started"
             MirrorStop -> "mirror.stop"
             is MirrorRotated -> "mirror.rotated"
+            is InputTap -> "input.tap"
+            is InputSwipe -> "input.swipe"
+            is InputKey -> "input.key"
             is Unknown -> type
         }
 }

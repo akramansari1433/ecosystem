@@ -49,6 +49,25 @@ final class MirrorSession {
         phase = .idle
     }
 
+    // MARK: remote control
+
+    /// Coordinates are normalized 0…1 with the origin at the screen's top-left.
+    func tap(x: Double, y: Double, longPress: Bool = false) {
+        guard phase == .streaming else { return }
+        manager.send(.inputTap(.init(longPress: longPress, x: x, y: y)))
+    }
+
+    func swipe(from: CGPoint, to: CGPoint, durationMs: Int) {
+        guard phase == .streaming else { return }
+        manager.send(.inputSwipe(.init(
+            durationMs: durationMs, x1: from.x, x2: to.x, y1: from.y, y2: to.y)))
+    }
+
+    func pressKey(_ key: String) {
+        guard phase == .streaming else { return }
+        manager.send(.inputKey(.init(key: key)))
+    }
+
     private func run() async {
         do {
             // The phone shows a consent dialog once per session; retry until the

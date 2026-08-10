@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="accessibility_description">Lets Ecosystem send text you copy on this
-        phone to your Mac. It does not read screen content.</string>
+    <string name="accessibility_description">Lets your Mac send text you copy here,
+        and control this phone while mirroring (taps, swipes, Back/Home/Recents).
+        Ecosystem does not read screen content.</string>
 </resources>

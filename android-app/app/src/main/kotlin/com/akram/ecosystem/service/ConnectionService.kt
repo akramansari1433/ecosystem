@@ -75,7 +75,7 @@ class ConnectionService : Service() {
         private const val CONSENT_NOTIFICATION_ID = 3
         private const val ACTION_STOP_RING = "com.akram.ecosystem.STOP_RING"
         const val PROTOCOL_VERSION = 1
-        val CAPABILITIES = listOf("clipboard", "ring", "fs", "mirror")
+        val CAPABILITIES = listOf("clipboard", "ring", "fs", "mirror", "input")
 
         private val _state = MutableStateFlow(UiState())
         val state: StateFlow<UiState> = _state
@@ -283,6 +283,21 @@ class ConnectionService : Service() {
                 Log.i(TAG, "transfer ${m.payload.token}: ok=${m.payload.ok}")
             is Message.MirrorStart -> handleMirrorStart(envelope.id, m.payload)
             Message.MirrorStop -> stopMirroring()
+            is Message.InputTap -> {
+                val (w, h) = screenSize()
+                com.akram.ecosystem.accessibility.RemoteInput.tap(
+                    (m.payload.x * w).toFloat(), (m.payload.y * h).toFloat(),
+                    m.payload.longPress)
+            }
+            is Message.InputSwipe -> {
+                val (w, h) = screenSize()
+                com.akram.ecosystem.accessibility.RemoteInput.swipe(
+                    (m.payload.x1 * w).toFloat(), (m.payload.y1 * h).toFloat(),
+                    (m.payload.x2 * w).toFloat(), (m.payload.y2 * h).toFloat(),
+                    m.payload.durationMs.toLong())
+            }
+            is Message.InputKey ->
+                com.akram.ecosystem.accessibility.RemoteInput.globalAction(m.payload.key)
             else -> Log.d(TAG, "ignoring ${m.typeString}")
         }
     }
@@ -595,6 +610,13 @@ class ConnectionService : Service() {
                 .setOngoing(true)
                 .addAction(Notification.Action.Builder(null, "Stop", stop).build())
                 .build())
+    }
+
+    /** Current screen size in pixels; input arrives normalized to it. */
+    private fun screenSize(): Pair<Int, Int> {
+        val bounds = getSystemService(android.view.WindowManager::class.java)
+            .maximumWindowMetrics.bounds
+        return bounds.width() to bounds.height()
     }
 
     // MARK: mirroring

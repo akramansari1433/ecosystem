@@ -61,6 +61,9 @@ enum ProtocolCodec {
         case .mirrorStart(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .mirrorStarted(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .mirrorRotated(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .inputTap(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .inputSwipe(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .inputKey(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .ping, .pong, .pairAccept, .pairReject, .pairConfirm,
              .ringStart, .ringStop, .ringStopped, .unknown,
              .mirrorNeedsConsent, .mirrorStop:
@@ -125,6 +128,9 @@ enum ProtocolCodec {
         case "mirror.started": message = .mirrorStarted(try payload(from: data, type: header.type))
         case "mirror.stop": message = .mirrorStop
         case "mirror.rotated": message = .mirrorRotated(try payload(from: data, type: header.type))
+        case "input.tap": message = .inputTap(try payload(from: data, type: header.type))
+        case "input.swipe": message = .inputSwipe(try payload(from: data, type: header.type))
+        case "input.key": message = .inputKey(try payload(from: data, type: header.type))
         default: message = .unknown(header.type)
         }
         return InboundEnvelope(id: header.id, replyTo: header.replyTo, message: message)
