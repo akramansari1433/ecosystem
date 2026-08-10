@@ -4,26 +4,38 @@ import Observation
 @Observable
 @MainActor
 final class AppState {
-    enum ConnectionStatus {
-        case disconnected
+    enum Status: Equatable {
         case searching
-        case connected(deviceName: String)
+        case foundUnpaired(String)
+        case pairing
+        case connected(String)
+        case error(String)
     }
 
-    var status: ConnectionStatus = .disconnected
+    var status: Status = .searching
+    var paired = false
+    var connected = false
+    var phoneName: String?
+    var discoveredPhone: String?
+    var pairingCode: String?
+    var ringing = false
 
     var statusText: String {
         switch status {
-        case .disconnected: "Not connected"
-        case .searching: "Looking for your phone…"
-        case .connected(let name): "Connected to \(name)"
+        case .searching:
+            paired ? "Looking for your phone…" : "Not paired"
+        case .foundUnpaired(let name):
+            "Found \(name) — not paired yet"
+        case .pairing:
+            "Pairing…"
+        case .connected(let name):
+            "Connected to \(name)"
+        case .error(let message):
+            message
         }
     }
 
     var menuBarSymbol: String {
-        switch status {
-        case .connected: "iphone.gen3.radiowaves.left.and.right"
-        default: "iphone.gen3.slash"
-        }
+        connected ? "iphone.gen3.radiowaves.left.and.right" : "iphone.gen3.slash"
     }
 }

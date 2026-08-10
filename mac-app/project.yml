@@ -5,6 +5,11 @@ options:
     macOS: "15.0"
   createIntermediateGroups: true
 
+packages:
+  Certificates:
+    url: https://github.com/apple/swift-certificates
+    from: "1.0.0"
+
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -18,6 +23,9 @@ targets:
     platform: macOS
     sources:
       - Ecosystem
+    dependencies:
+      - package: Certificates
+        product: X509
     info:
       path: Ecosystem/Info.plist
       properties:
@@ -42,7 +50,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.akram.ecosystem.tests
-        TEST_VECTORS_DIR: $(SRCROOT)/../protocol/test-vectors
+        GENERATE_INFOPLIST_FILE: true
 
 schemes:
   Ecosystem:
