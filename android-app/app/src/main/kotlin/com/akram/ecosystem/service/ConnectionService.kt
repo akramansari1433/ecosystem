@@ -131,21 +131,20 @@ class ConnectionService : Service() {
     private suspend fun serverLoop() {
         while (true) {
             try {
-                val pinned = pairedPeerFile.takeIf { it.exists() }?.readBytes()
-                val server = TlsServer(identity, pinned).listen()
+                // One server for the process lifetime; the trust manager reads the
+                // current pin per handshake, so pairing never changes the port.
+                val server = TlsServer(identity) {
+                    pairedPeerFile.takeIf { it.exists() }?.readBytes()
+                }.listen()
                 serverSocket = server
                 advertiser.register(server.localPort, deviceId, deviceName(), PROTOCOL_VERSION)
-                Log.i(TAG, "listening on ${server.localPort} (paired=${pinned != null})")
+                Log.i(TAG, "listening on ${server.localPort}")
                 while (true) {
                     val socket = server.accept() as SSLSocket
                     runCatching { socket.startHandshake() }
                         .onFailure { Log.w(TAG, "handshake failed: $it"); socket.close() }
                         .onSuccess { handleConnection(socket) }
-                    // Pairing state may have changed (pin added/cleared): rebind if so.
-                    val nowPinned = pairedPeerFile.takeIf { it.exists() }?.readBytes()
-                    if (!nowPinned.contentEquals(pinned)) break
                 }
-                runCatching { server.close() }
             } catch (t: Throwable) {
                 Log.e(TAG, "server loop error", t)
                 kotlinx.coroutines.delay(3000)

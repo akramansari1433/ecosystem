@@ -106,6 +106,11 @@ actor ControlConnection {
             lastReceived = Date()
             receiveLoop()
             startPing()
+        case .waiting:
+            // Connection refused or unreachable (e.g. stale Bonjour record after the
+            // phone re-registered). NWConnection would idle here indefinitely; fail
+            // fast so the manager re-dials with fresh resolution and backoff.
+            finish()
         case .failed, .cancelled:
             finish()
         default:

@@ -40,29 +40,41 @@ class PinnedTrustManagerTest {
 
     @Test
     fun unpinnedAcceptsAnyAndRecordsLeaf() {
-        val tm = PinnedTrustManager(pinnedDer = null)
+        val tm = PinnedTrustManager { null }
         tm.checkClientTrusted(arrayOf(identA.certificate), "EC")
         assertArrayEquals(identA.certDer, tm.lastPeerDer)
     }
 
     @Test
     fun pinnedAcceptsExactMatch() {
-        val tm = PinnedTrustManager(pinnedDer = identA.certDer)
+        val tm = PinnedTrustManager { identA.certDer }
         tm.checkClientTrusted(arrayOf(identA.certificate), "EC")
         assertArrayEquals(identA.certDer, tm.lastPeerDer)
     }
 
     @Test
     fun pinnedRejectsMismatch() {
-        val tm = PinnedTrustManager(pinnedDer = identA.certDer)
+        val tm = PinnedTrustManager { identA.certDer }
         assertThrows(CertificateException::class.java) {
             tm.checkClientTrusted(arrayOf(identB.certificate), "EC")
         }
     }
 
     @Test
+    fun pinChangeAppliesToNextHandshakeWithoutRebind() {
+        var pin: ByteArray? = null
+        val tm = PinnedTrustManager { pin }
+        tm.checkClientTrusted(arrayOf(identB.certificate), "EC") // unpaired: anyone
+        pin = identA.certDer // pairing completed
+        assertThrows(CertificateException::class.java) {
+            tm.checkClientTrusted(arrayOf(identB.certificate), "EC")
+        }
+        tm.checkClientTrusted(arrayOf(identA.certificate), "EC") // pinned peer OK
+    }
+
+    @Test
     fun emptyChainRejected() {
-        val tm = PinnedTrustManager(pinnedDer = null)
+        val tm = PinnedTrustManager { null }
         assertThrows(CertificateException::class.java) {
             tm.checkClientTrusted(emptyArray(), "EC")
         }
