@@ -179,11 +179,20 @@ final class FileBrowserModel {
         ([Self.root] + pathComponents).joined(separator: "/")
     }
 
+    /// Listings already seen this session, keyed by path + filter. Revisits show
+    /// instantly from cache while a silent refresh replaces them if stale.
+    private var listingCache: [String: [FsEntry]] = [:]
+
     func refresh() async {
-        isLoading = true
         errorMessage = nil
         let requestedPath = currentPath
         let requestedFilter = filter
+        let cacheKey = "\(requestedPath)|\(requestedFilter.rawValue)"
+        if let cached = listingCache[cacheKey] {
+            entries = cached
+        } else {
+            isLoading = true
+        }
         defer { isLoading = false }
         do {
             let reply: InboundEnvelope
@@ -206,6 +215,7 @@ final class FileBrowserModel {
                 return
             }
             entries = payload.entries
+            listingCache[cacheKey] = payload.entries
         } catch {
             // Never keep a stale listing: showing the previous folder's rows made
             // repeated clicks append the same folder to the path over and over.
@@ -290,6 +300,40 @@ final class FileBrowserModel {
                 _ = try await download(entry, into: downloads)
             } catch {
                 errorMessage = "Download failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    // MARK: Quick Look
+
+    /// Bound to `.quickLookPreview`; setting it opens the system preview panel.
+    var quickLookURL: URL?
+
+    /// Previews already fetched this session, keyed by path + mtime.
+    private var quickLookCache: [String: URL] = [:]
+
+    func quickLook(_ entry: FsEntry) {
+        guard !entry.isDir else { return }
+        let path = remotePath(for: entry)
+        let key = "\(path)#\(entry.mtimeMillis)"
+        if let cached = quickLookCache[key],
+           FileManager.default.fileExists(atPath: cached.path) {
+            quickLookURL = cached
+            return
+        }
+        Task {
+            do {
+                let dir = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("ecosystem-previews/\(UUID().uuidString)")
+                try FileManager.default.createDirectory(
+                    at: dir, withIntermediateDirectories: true)
+                let url = try await download(
+                    remotePath: path, name: entry.name, expectedSize: entry.size,
+                    into: dir, saveAs: nil)
+                quickLookCache[key] = url
+                quickLookURL = url
+            } catch {
+                errorMessage = "Preview failed: \(error.localizedDescription)"
             }
         }
     }

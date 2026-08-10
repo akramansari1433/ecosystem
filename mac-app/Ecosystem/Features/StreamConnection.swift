@@ -34,7 +34,9 @@ actor StreamConnection {
             }
             complete((SecCertificateCopyData(leaf) as Data) == pinnedPeerDER)
         }, DispatchQueue(label: "ecosystem.stream-verify"))
-        connection = NWConnection(to: endpoint, using: NWParameters(tls: tls))
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+        connection = NWConnection(to: endpoint, using: NWParameters(tls: tls, tcp: tcp))
     }
 
     private func start() async throws {

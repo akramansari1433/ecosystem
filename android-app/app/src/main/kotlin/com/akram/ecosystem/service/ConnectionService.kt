@@ -170,6 +170,7 @@ class ConnectionService : Service() {
      */
     private fun handleConnection(socket: SSLSocket) {
         socket.soTimeout = 35_000
+        socket.tcpNoDelay = true // small frames must not wait for Nagle coalescing
         val reader = FrameReader()
         val input = socket.inputStream
         val buf = ByteArray(32 * 1024)
@@ -296,14 +297,18 @@ class ConnectionService : Service() {
                 "Grant 'All files access' in the Ecosystem app")), replyTo = requestId)
             return
         }
-        runCatching { fileService.list(path) }
-            .onSuccess {
-                sendMessage(Message.FsEntries(FsEntriesPayload(it)), replyTo = requestId)
-            }
-            .onFailure {
-                sendMessage(Message.Error(ErrorPayload("fs_error", it.message)),
-                    replyTo = requestId)
-            }
+        // Off the reader thread: a slow storage stat must never delay ping/pong
+        // or other replies queued behind it.
+        scope.launch {
+            runCatching { fileService.list(path) }
+                .onSuccess {
+                    sendMessage(Message.FsEntries(FsEntriesPayload(it)), replyTo = requestId)
+                }
+                .onFailure {
+                    sendMessage(Message.Error(ErrorPayload("fs_error", it.message)),
+                        replyTo = requestId)
+                }
+        }
     }
 
     private val videoExtensions = setOf("mp4", "mkv", "mov", "webm", "3gp", "avi")
@@ -336,8 +341,13 @@ class ConnectionService : Service() {
         }
     }
 
+    // At most 2 concurrent decodes: HEIC decoding is CPU-heavy and must not
+    // starve listings and transfers sharing the connection.
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val thumbDispatcher = Dispatchers.IO.limitedParallelism(2)
+
     private fun handleFsThumb(requestId: String, payload: com.akram.ecosystem.core.FsThumbPayload) {
-        scope.launch {
+        scope.launch(thumbDispatcher) {
             val size = android.util.Size(payload.maxEdge, payload.maxEdge)
             val bitmap = runCatching {
                 val file = fileService.resolve(payload.path)

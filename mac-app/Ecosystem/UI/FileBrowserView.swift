@@ -1,3 +1,4 @@
+import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -68,6 +69,7 @@ struct FileBrowserView: View {
             model.upload(urls)
             return true
         }
+        .quickLookPreview($model.quickLookURL)
         .task { await model.refresh() }
         .frame(minWidth: 720, minHeight: 420)
     }
@@ -191,6 +193,18 @@ struct FileBrowserView: View {
             }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
+        .onKeyPress(.space) {
+            previewSelection()
+            return .handled
+        }
+    }
+
+    /// Spacebar, Finder-style: preview the first selected file.
+    private func previewSelection() {
+        if let entry = model.filteredEntries.first(
+            where: { selection.contains($0.id) && !$0.isDir }) {
+            model.quickLook(entry)
+        }
     }
 
     private func listRow(_ entry: FsEntry) -> some View {
@@ -225,6 +239,12 @@ struct FileBrowserView: View {
                 }
             }
             .padding(18)
+        }
+        .focusable()
+        .focusEffectDisabled()
+        .onKeyPress(.space) {
+            previewSelection()
+            return .handled
         }
     }
 
@@ -374,6 +394,9 @@ struct FileBrowserView: View {
             Divider()
         }
         if files.count == 1 {
+            Button("Quick Look") { model.quickLook(files[0]) }
+        }
+        if files.count == 1 {
             Button("Save to Downloads") { model.downloadToDownloadsFolder(files[0]) }
             Button("Save As…") { model.saveAs(files[0]) }
         } else if files.count > 1 {
@@ -399,13 +422,14 @@ struct FileBrowserView: View {
         Button("Refresh") { Task { await model.refresh() } }
     }
 
-    /// Double-click: folders open; files are saved to Downloads.
+    /// Double-click: folders open; files preview in Quick Look (saving stays an
+    /// explicit action — drag out, or right-click → Save).
     private func activate(_ entry: FsEntry) {
         if entry.isDir {
             selection.removeAll()
             model.enter(entry)
         } else {
-            model.downloadToDownloadsFolder(entry)
+            model.quickLook(entry)
         }
     }
 

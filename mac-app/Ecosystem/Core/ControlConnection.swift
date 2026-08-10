@@ -76,7 +76,11 @@ actor ControlConnection {
             }
         }, DispatchQueue(label: "ecosystem.tls-verify"))
 
-        connection = NWConnection(to: endpoint, using: NWParameters(tls: tls))
+        // Nagle delays small frames (every request here is small) by up to
+        // ~200 ms while it waits to coalesce; disable it for snappy round trips.
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+        connection = NWConnection(to: endpoint, using: NWParameters(tls: tls, tcp: tcp))
     }
 
     /// Starts the connection; events (ready / messages / closed) arrive on the stream.
