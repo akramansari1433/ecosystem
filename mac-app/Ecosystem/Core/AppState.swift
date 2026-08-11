@@ -4,6 +4,8 @@ import Observation
 @Observable
 @MainActor
 final class AppState {
+    static let shared = AppState()
+
     enum Status: Equatable {
         case searching
         case foundUnpaired(String)

@@ -11,6 +11,12 @@ private let log = Logger(subsystem: "com.akram.ecosystem", category: "manager")
 /// and keeps the link alive across sleep, Wi-Fi changes and going out of range.
 @MainActor
 final class ConnectionManager {
+    /// SwiftUI re-runs `App.init()` when a new window scene appears, so the app
+    /// must not build its connection stack there: a second stack would open a
+    /// second control connection, and the phone keeps only the newest — which
+    /// looked like the connection dropping every time a window opened.
+    static let shared = ConnectionManager(appState: AppState.shared)
+
     private let appState: AppState
     private let browser = DeviceBrowser()
     private var connection: ControlConnection?
@@ -48,7 +54,11 @@ final class ConnectionManager {
         self.appState = appState
     }
 
+    private var hasStarted = false
+
     func start() {
+        guard !hasStarted else { return }
+        hasStarted = true
         appState.paired = PairingStore.isPaired
         appState.status = .searching
         clipboard.onLocalCopy = { [weak self] payload in

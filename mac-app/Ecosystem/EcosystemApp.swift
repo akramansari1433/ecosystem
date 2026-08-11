@@ -6,9 +6,9 @@ struct EcosystemApp: App {
     @State private var manager: ConnectionManager
 
     init() {
-        let state = AppState()
+        let state = AppState.shared
         _appState = State(initialValue: state)
-        let manager = ConnectionManager(appState: state)
+        let manager = ConnectionManager.shared
         _manager = State(initialValue: manager)
         // The unit-test runner launches this app as its host; starting the real
         // connection stack there would delete the LIVE app's keychain and battle

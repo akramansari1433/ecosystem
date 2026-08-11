@@ -474,6 +474,9 @@ class ConnectionService : Service() {
     /** Routes an attached stream connection by kind (file transfer / mirror). */
     private fun runStream(socket: SSLSocket, reader: FrameReader, attach: StreamAttachPayload) {
         try {
+            // Video streams are one-way: the Mac sends nothing once attached, so
+            // the control connection's 35s read timeout would end them mid-session.
+            if (attach.kind == "mirror" || attach.kind == "camera") socket.soTimeout = 0
             when (attach.kind) {
                 "mirror" -> {
                     if (attach.token == mirrorToken) {
