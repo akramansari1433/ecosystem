@@ -9,12 +9,14 @@ private final class MirrorInputView: NSView {
     var onSwipe: ((CGPoint, CGPoint, Int) -> Void)?
     var onText: ((String) -> Void)?
     var onKey: ((String) -> Void)?
+    var onScroll: ((String, CGPoint) -> Void)?
 
     private var downPoint: CGPoint?
     private var downTime: Date?
-    private var scrollAnchor: CGPoint?
+    private var scrollFinger: CGPoint?
     private var scrollAccumulated: CGFloat = 0
     private var lastScrollSent = Date.distantPast
+    private var endScrollWork: DispatchWorkItem?
 
     init(videoLayer: AVSampleBufferDisplayLayer) {
         self.videoLayer = videoLayer
@@ -117,20 +119,93 @@ private final class MirrorInputView: NSView {
         }
     }
 
+    /// Trackpad scrolling drives a single continuous drag on the phone: the
+    /// virtual finger follows your fingers 1:1, including momentum, so the
+    /// phone's own scrolling physics do the rest. A mouse wheel has no gesture
+    /// phases, so its clicks become short flicks instead.
     override func scrollWheel(with event: NSEvent) {
-        // Coalesce wheel deltas into occasional flicks; one swipe per event
-        // would flood the phone and scroll erratically.
-        if scrollAnchor == nil { scrollAnchor = normalized(event) }
-        scrollAccumulated += event.scrollingDeltaY
-        guard Date().timeIntervalSince(lastScrollSent) > 0.11,
-              abs(scrollAccumulated) > 2, let anchor = scrollAnchor else { return }
+        let hasPhases = event.phase != [] || event.momentumPhase != []
+        guard hasPhases else {
+            wheelFlick(event)
+            return
+        }
+
+        if event.phase.contains(.began) {
+            beginScroll(at: normalized(event))
+        }
+        if !event.scrollingDeltaY.isZero || !event.scrollingDeltaX.isZero {
+            if scrollFinger == nil { beginScroll(at: normalized(event)) }
+            advanceScroll(dx: event.scrollingDeltaX, dy: event.scrollingDeltaY)
+        }
+        if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            // Fingers lifted, but momentum events may still arrive; only end the
+            // drag when no momentum follows.
+            if event.momentumPhase == [] { endScrollSoon() }
+        }
+        if event.momentumPhase.contains(.ended) || event.momentumPhase.contains(.cancelled) {
+            endScroll()
+        }
+    }
+
+    private func beginScroll(at point: CGPoint) {
+        endScrollWork?.cancel()
+        endScrollWork = nil
+        guard scrollFinger == nil else { return }
+        let start = CGPoint(x: point.x, y: min(max(point.y, 0.15), 0.85))
+        scrollFinger = start
+        onScroll?("begin", start)
         lastScrollSent = Date()
-        let travel = max(-0.55, min(0.55, scrollAccumulated / bounds.height * 2.2))
+    }
+
+    private func advanceScroll(dx: CGFloat, dy: CGFloat) {
+        guard var finger = scrollFinger else { return }
+        // 1:1 with the trackpad, in the video's own coordinate space.
+        finger.x = min(max(finger.x + dx / max(bounds.width, 1), 0.02), 0.98)
+        finger.y = min(max(finger.y + dy / max(bounds.height, 1), 0.02), 0.98)
+        scrollFinger = finger
+
+        // ~30 Hz is enough to look smooth and keeps the phone's gesture queue short.
+        guard Date().timeIntervalSince(lastScrollSent) > 0.033 else { return }
+        lastScrollSent = Date()
+
+        // Re-anchor before the finger runs off the edge, so long scrolls continue.
+        if finger.y <= 0.05 || finger.y >= 0.95 {
+            onScroll?("end", finger)
+            let restart = CGPoint(x: finger.x, y: finger.y <= 0.05 ? 0.85 : 0.15)
+            scrollFinger = restart
+            onScroll?("begin", restart)
+            return
+        }
+        onScroll?("move", finger)
+    }
+
+    /// Debounced end: a new burst within a moment continues the same drag.
+    private func endScrollSoon() {
+        endScrollWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.endScroll() }
+        endScrollWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
+    private func endScroll() {
+        endScrollWork?.cancel()
+        endScrollWork = nil
+        guard let finger = scrollFinger else { return }
+        scrollFinger = nil
+        onScroll?("end", finger)
+    }
+
+    private func wheelFlick(_ event: NSEvent) {
+        scrollAccumulated += event.scrollingDeltaY
+        guard Date().timeIntervalSince(lastScrollSent) > 0.09,
+              abs(scrollAccumulated) > 1 else { return }
+        lastScrollSent = Date()
+        let anchor = normalized(event)
+        let travel = max(-0.35, min(0.35, scrollAccumulated / bounds.height * 6))
         scrollAccumulated = 0
-        scrollAnchor = nil
-        let startY = min(max(anchor.y, 0.25), 0.75)
-        let endY = min(max(startY + travel, 0.03), 0.97)
-        onSwipe?(CGPoint(x: anchor.x, y: startY), CGPoint(x: anchor.x, y: endY), 90)
+        let startY = min(max(anchor.y, 0.3), 0.7)
+        let endY = min(max(startY + travel, 0.05), 0.95)
+        onSwipe?(CGPoint(x: anchor.x, y: startY), CGPoint(x: anchor.x, y: endY), 130)
     }
 
     /// AppKit's origin is bottom-left; Android's is top-left.
@@ -156,6 +231,7 @@ private struct MirrorSurface: NSViewRepresentable {
         }
         view.onText = { session.type($0) }
         view.onKey = { session.pressKey($0) }
+        view.onScroll = { phase, point in session.scroll(phase: phase, at: point) }
         return view
     }
 

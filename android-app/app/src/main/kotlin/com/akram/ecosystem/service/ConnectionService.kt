@@ -343,6 +343,11 @@ class ConnectionService : Service() {
             }
             is Message.InputText ->
                 com.akram.ecosystem.accessibility.RemoteInput.typeText(m.payload.text)
+            is Message.InputScroll -> {
+                val (w, h) = screenSize()
+                com.akram.ecosystem.accessibility.RemoteInput.scroll(
+                    m.payload.phase, (m.payload.x * w).toFloat(), (m.payload.y * h).toFloat())
+            }
             else -> Log.d(TAG, "ignoring ${m.typeString}")
         }
     }

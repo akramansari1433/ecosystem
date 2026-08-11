@@ -33,14 +33,11 @@ struct MenuContent: View {
                     manager.toggleRing()
                 }
                 MenuRow(icon: "folder", title: "Browse phone files…", enabled: ready) {
-                    openWindow(id: "phone-files")
-                    NSApp.activate(ignoringOtherApps: true)
+                    open(window: "phone-files")
                 }
                 MenuRow(icon: "rectangle.on.rectangle", title: "Mirror phone screen…",
                         enabled: ready) {
-                    openWindow(id: "phone-mirror")
-                    NSApp.activate(ignoringOtherApps: true)
-                    manager.mirror.start()
+                    open(window: "phone-mirror") { manager.mirror.start() }
                 }
             }
             .padding(8)
@@ -57,6 +54,23 @@ struct MenuContent: View {
     }
 
     private var ready: Bool { appState.connected && appState.paired }
+
+    /// Dismisses the menu-bar panel first: leaving it hanging over the window it
+    /// just opened looks broken, and it swallows the first click.
+    private func open(window id: String, then action: (() -> Void)? = nil) {
+        dismissMenuBarPanel()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            openWindow(id: id)
+            NSApp.activate(ignoringOtherApps: true)
+            action?()
+        }
+    }
+
+    private func dismissMenuBarPanel() {
+        // MenuBarExtra's window-style panel has no public dismiss API; sending
+        // the standard cancel action closes it the same way pressing esc does.
+        NSApp.sendAction(#selector(NSResponder.cancelOperation(_:)), to: nil, from: nil)
+    }
 
     // MARK: header
 

@@ -40,6 +40,66 @@ object RemoteInput {
         dispatch(path, durationMs.coerceIn(30L, 3_000L))
     }
 
+    // MARK: continuous scrolling
+    //
+    // A trackpad produces a stream of small deltas. Replaying each one as its own
+    // swipe felt like a series of flicks, so the Mac drives one long gesture and
+    // this keeps it alive with continued strokes — the phone sees a single finger
+    // dragging, which is what its own fling physics expect.
+
+    private const val SEGMENT_MS = 70L
+
+    private var scrollStroke: GestureDescription.StrokeDescription? = null
+    private var scrollX = 0f
+    private var scrollY = 0f
+
+    fun scroll(phase: String, x: Float, y: Float) {
+        val service = service ?: return
+        handler.post {
+            when (phase) {
+                "begin" -> {
+                    val path = Path().apply { moveTo(x, y) }
+                    val stroke = GestureDescription.StrokeDescription(
+                        path, 0, SEGMENT_MS, true)
+                    scrollStroke = stroke
+                    scrollX = x
+                    scrollY = y
+                    send(service, stroke)
+                }
+                "move", "end" -> {
+                    val previous = scrollStroke ?: return@post
+                    val continuing = phase == "move"
+                    // A zero-length path is rejected; nudge it a hair.
+                    val toY = if (x == scrollX && y == scrollY) y + 0.5f else y
+                    val path = Path().apply {
+                        moveTo(scrollX, scrollY)
+                        lineTo(x, toY)
+                    }
+                    val stroke = runCatching {
+                        previous.continueStroke(path, 0, SEGMENT_MS, continuing)
+                    }.getOrNull() ?: run {
+                        scrollStroke = null
+                        return@post
+                    }
+                    scrollStroke = if (continuing) stroke else null
+                    scrollX = x
+                    scrollY = toY
+                    send(service, stroke)
+                }
+            }
+        }
+    }
+
+    private fun send(
+        service: AccessibilityService,
+        stroke: GestureDescription.StrokeDescription,
+    ) {
+        runCatching {
+            service.dispatchGesture(
+                GestureDescription.Builder().addStroke(stroke).build(), null, null)
+        }.onFailure { Log.w(TAG, "scroll dispatch failed: $it") }
+    }
+
     fun globalAction(key: String): Boolean {
         val service = service ?: return false
         when (key) {

@@ -76,6 +76,12 @@ final class MirrorSession {
         }
     }
 
+    /// One continuous scroll drag: "begin", then "move"s, then "end".
+    func scroll(phase: String, at point: CGPoint) {
+        guard phase == "end" || self.phase == .streaming else { return }
+        manager.send(.inputScroll(.init(phase: phase, x: point.x, y: point.y)))
+    }
+
     /// Types into whatever field has focus on the phone.
     func type(_ text: String) {
         guard phase == .streaming, !text.isEmpty else { return }

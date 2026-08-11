@@ -56,6 +56,7 @@ object ProtocolCodec {
             is Message.InputSwipe -> json.encodeToJsonElement(message.payload)
             is Message.InputKey -> json.encodeToJsonElement(message.payload)
             is Message.InputText -> json.encodeToJsonElement(message.payload)
+            is Message.InputScroll -> json.encodeToJsonElement(message.payload)
             is Message.AuthChallenge -> json.encodeToJsonElement(message.payload)
             is Message.AuthResponse -> json.encodeToJsonElement(message.payload)
             else -> null
@@ -103,6 +104,7 @@ object ProtocolCodec {
             "input.swipe" -> Message.InputSwipe(payload(raw))
             "input.key" -> Message.InputKey(payload(raw))
             "input.text" -> Message.InputText(payload(raw))
+            "input.scroll" -> Message.InputScroll(payload(raw))
             "auth.challenge" -> Message.AuthChallenge(payload(raw))
             "auth.response" -> Message.AuthResponse(payload(raw))
             "auth.ok" -> Message.AuthOK

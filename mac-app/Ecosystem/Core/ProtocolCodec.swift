@@ -64,6 +64,7 @@ enum ProtocolCodec {
         case .inputSwipe(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .inputKey(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .inputText(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .inputScroll(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .authChallenge(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .authResponse(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .ping, .pong, .pairAccept, .pairReject, .pairConfirm,
@@ -133,6 +134,7 @@ enum ProtocolCodec {
         case "input.swipe": message = .inputSwipe(try payload(from: data, type: header.type))
         case "input.key": message = .inputKey(try payload(from: data, type: header.type))
         case "input.text": message = .inputText(try payload(from: data, type: header.type))
+        case "input.scroll": message = .inputScroll(try payload(from: data, type: header.type))
         case "auth.challenge": message = .authChallenge(try payload(from: data, type: header.type))
         case "auth.response": message = .authResponse(try payload(from: data, type: header.type))
         case "auth.ok": message = .authOK

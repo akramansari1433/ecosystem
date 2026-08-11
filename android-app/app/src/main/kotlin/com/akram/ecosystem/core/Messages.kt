@@ -141,6 +141,14 @@ data class InputSwipePayload(
 )
 
 @Serializable
+data class InputScrollPayload(
+    /** "begin", "move" or "end" — one continuous drag on the phone. */
+    val phase: String,
+    val x: Double,
+    val y: Double,
+)
+
+@Serializable
 data class InputTextPayload(
     val text: String,
 )
@@ -191,6 +199,7 @@ sealed interface Message {
     data class InputSwipe(val payload: InputSwipePayload) : Message
     data class InputKey(val payload: InputKeyPayload) : Message
     data class InputText(val payload: InputTextPayload) : Message
+    data class InputScroll(val payload: InputScrollPayload) : Message
     data class AuthChallenge(val payload: AuthChallengePayload) : Message
     data class AuthResponse(val payload: AuthResponsePayload) : Message
     data object AuthOK : Message
@@ -229,6 +238,7 @@ sealed interface Message {
             is InputSwipe -> "input.swipe"
             is InputKey -> "input.key"
             is InputText -> "input.text"
+            is InputScroll -> "input.scroll"
             is AuthChallenge -> "auth.challenge"
             is AuthResponse -> "auth.response"
             AuthOK -> "auth.ok"
