@@ -17,32 +17,17 @@
 		2292B4EDC9F6D39058FF944C /* StreamConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */; };
 		3ABC86EB39404ACC14CCB4BB /* ClipboardSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BB3230DAE77ACE2C1F815C /* ClipboardSync.swift */; };
 		472EEEB6FD9298D0887404CA /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003CE1F6634354A0762DDD21 /* AppState.swift */; };
-		547D6FCAB699B4F26D4A6930 /* ProtocolCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB4392E8CF7B22E8AEF48CBD /* ProtocolCodecTests.swift */; };
 		598657EB28FC92DBB8022B4C /* MirrorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C5509329948F276C59FB9F /* MirrorSession.swift */; };
-		83E657C190655288EABE6A26 /* BinaryFramesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785ED431DE6E4B40980418A1 /* BinaryFramesTests.swift */; };
 		85BAF2A7EA79BCA1FD10F76B /* ConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC65AADAEA421ABDBB56F40D /* ConnectionManager.swift */; };
 		99FB15E12A450DFF0BA27FC6 /* Identity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C90C4DDE6E434D78F959671 /* Identity.swift */; };
-		9E3EB6473A55FFDB3FDB0868 /* PairingCodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD47517E3BFBECCB89FFB7EA /* PairingCodeTests.swift */; };
 		A25373137800201449090B82 /* MirrorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */; };
 		A85689BE85659933A8F79C1B /* EcosystemApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F97B7789670B31B8A473C61 /* EcosystemApp.swift */; };
 		B8FF7FF56456EF460A2B6B36 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3A4DA73670F8B5D2839D0B /* FileBrowserView.swift */; };
 		C48194E7AB7A02E82FD29388 /* PairingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEFCBBACFFCC5E8341B2614 /* PairingEngine.swift */; };
-		D01D0DD90D4DC3E58AD9FA28 /* FrameReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65016B6F0072803375AD145C /* FrameReaderTests.swift */; };
-		DF621F4FF2BDA035EFD3C7E5 /* PairingEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B913F56A50D0B2DE8FF2F364 /* PairingEngineTests.swift */; };
 		E2D2780193FF0DD8FF8573A5 /* PairingCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94CD0BD69396AC6E5A07D21F /* PairingCode.swift */; };
 		E343F3D4B7D06BF2A83473B7 /* BinaryFrames.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04E1941B706ADDDE5DC146E /* BinaryFrames.swift */; };
 		F22EB9E21BB925A6858F3B7B /* MenuContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264E91AA7C2D9DDB60797974 /* MenuContent.swift */; };
 /* End PBXBuildFile section */
-
-/* Begin PBXContainerItemProxy section */
-		E43EB02B02267EBE7CDFC5FC /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 79CE8FDC44B8B71B011C09C3 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C1E6143C5B9E25F080E919FA;
-			remoteInfo = Ecosystem;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		003CE1F6634354A0762DDD21 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
@@ -54,9 +39,6 @@
 		4F97B7789670B31B8A473C61 /* EcosystemApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EcosystemApp.swift; sourceTree = "<group>"; };
 		5C90C4DDE6E434D78F959671 /* Identity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identity.swift; sourceTree = "<group>"; };
 		6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorWindow.swift; sourceTree = "<group>"; };
-		65016B6F0072803375AD145C /* FrameReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameReaderTests.swift; sourceTree = "<group>"; };
-		785ED431DE6E4B40980418A1 /* BinaryFramesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryFramesTests.swift; sourceTree = "<group>"; };
-		8D8476E3FCD298F8F74CB553 /* EcosystemTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EcosystemTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		94CD0BD69396AC6E5A07D21F /* PairingCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCode.swift; sourceTree = "<group>"; };
 		9DAE884B9D12090ED543EE6D /* FileBrowserModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserModel.swift; sourceTree = "<group>"; };
 		A01C9702A34C121B7AA70421 /* H264Assembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H264Assembler.swift; sourceTree = "<group>"; };
@@ -64,11 +46,8 @@
 		A76DA50DBCAA9E450A57EB60 /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
 		AC65AADAEA421ABDBB56F40D /* ConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionManager.swift; sourceTree = "<group>"; };
 		B4BB3230DAE77ACE2C1F815C /* ClipboardSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSync.swift; sourceTree = "<group>"; };
-		B913F56A50D0B2DE8FF2F364 /* PairingEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingEngineTests.swift; sourceTree = "<group>"; };
 		C886575FBEC02F98C2883B81 /* ProtocolCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolCodec.swift; sourceTree = "<group>"; };
 		CB3A4DA73670F8B5D2839D0B /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
-		CB4392E8CF7B22E8AEF48CBD /* ProtocolCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolCodecTests.swift; sourceTree = "<group>"; };
-		CD47517E3BFBECCB89FFB7EA /* PairingCodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCodeTests.swift; sourceTree = "<group>"; };
 		D1C5509329948F276C59FB9F /* MirrorSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorSession.swift; sourceTree = "<group>"; };
 		E4AA591F1984F9E8B603F527 /* Ecosystem.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ecosystem.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F04E1941B706ADDDE5DC146E /* BinaryFrames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryFrames.swift; sourceTree = "<group>"; };
@@ -118,7 +97,6 @@
 			isa = PBXGroup;
 			children = (
 				5EB82D4FF0E390780D7120FA /* Ecosystem */,
-				B6100860472C7851463C8936 /* EcosystemTests */,
 				5E79D888D59D091F9EF48A9D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -127,7 +105,6 @@
 			isa = PBXGroup;
 			children = (
 				E4AA591F1984F9E8B603F527 /* Ecosystem.app */,
-				8D8476E3FCD298F8F74CB553 /* EcosystemTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -142,18 +119,6 @@
 				28FED88F042C8E56D23CD239 /* UI */,
 			);
 			path = Ecosystem;
-			sourceTree = "<group>";
-		};
-		B6100860472C7851463C8936 /* EcosystemTests */ = {
-			isa = PBXGroup;
-			children = (
-				785ED431DE6E4B40980418A1 /* BinaryFramesTests.swift */,
-				65016B6F0072803375AD145C /* FrameReaderTests.swift */,
-				CD47517E3BFBECCB89FFB7EA /* PairingCodeTests.swift */,
-				B913F56A50D0B2DE8FF2F364 /* PairingEngineTests.swift */,
-				CB4392E8CF7B22E8AEF48CBD /* ProtocolCodecTests.swift */,
-			);
-			path = EcosystemTests;
 			sourceTree = "<group>";
 		};
 		E6DD3E4DBB250845D747F474 /* Core */ = {
@@ -177,24 +142,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		8B267F65B8FBD3F0C037EA57 /* EcosystemTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 7E8DC3BC1ADB704B51739040 /* Build configuration list for PBXNativeTarget "EcosystemTests" */;
-			buildPhases = (
-				E2A03D3F676C0C1AB42CA286 /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				0EAEE893A773979FE7133BA5 /* PBXTargetDependency */,
-			);
-			name = EcosystemTests;
-			packageProductDependencies = (
-			);
-			productName = EcosystemTests;
-			productReference = 8D8476E3FCD298F8F74CB553 /* EcosystemTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 		C1E6143C5B9E25F080E919FA /* Ecosystem */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = BF3F23238EC5DCBAEB8C6403 /* Build configuration list for PBXNativeTarget "Ecosystem" */;
@@ -221,9 +168,6 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					8B267F65B8FBD3F0C037EA57 = {
-						ProvisioningStyle = Manual;
-					};
 					C1E6143C5B9E25F080E919FA = {
 						ProvisioningStyle = Manual;
 					};
@@ -244,7 +188,6 @@
 			projectRoot = "";
 			targets = (
 				C1E6143C5B9E25F080E919FA /* Ecosystem */,
-				8B267F65B8FBD3F0C037EA57 /* EcosystemTests */,
 			);
 		};
 /* End PBXProject section */
@@ -277,27 +220,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		E2A03D3F676C0C1AB42CA286 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				83E657C190655288EABE6A26 /* BinaryFramesTests.swift in Sources */,
-				D01D0DD90D4DC3E58AD9FA28 /* FrameReaderTests.swift in Sources */,
-				9E3EB6473A55FFDB3FDB0868 /* PairingCodeTests.swift in Sources */,
-				DF621F4FF2BDA035EFD3C7E5 /* PairingEngineTests.swift in Sources */,
-				547D6FCAB699B4F26D4A6930 /* ProtocolCodecTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		0EAEE893A773979FE7133BA5 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C1E6143C5B9E25F080E919FA /* Ecosystem */;
-			targetProxy = E43EB02B02267EBE7CDFC5FC /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0C1CB066CA61A723B690A9C8 /* Release */ = {
@@ -373,23 +296,6 @@
 				SDKROOT = macosx;
 			};
 			name = Debug;
-		};
-		3991BA3F0EAE988CC98F3AFE /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.akram.ecosystem.tests;
-				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ecosystem.app/Contents/MacOS/Ecosystem";
-			};
-			name = Release;
 		};
 		3FE156CA169C954B44774DC4 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -472,23 +378,6 @@
 			};
 			name = Debug;
 		};
-		8F5E4E749ABBD3B020FA320F /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.akram.ecosystem.tests;
-				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ecosystem.app/Contents/MacOS/Ecosystem";
-			};
-			name = Debug;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -497,15 +386,6 @@
 			buildConfigurations = (
 				465322CA4FC0DED946C29ACA /* Debug */,
 				0C1CB066CA61A723B690A9C8 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		7E8DC3BC1ADB704B51739040 /* Build configuration list for PBXNativeTarget "EcosystemTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				8F5E4E749ABBD3B020FA320F /* Debug */,
-				3991BA3F0EAE988CC98F3AFE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

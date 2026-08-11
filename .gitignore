@@ -13,6 +13,7 @@ android-app/local.properties
 android-app/**/build/
 *.apk
 *.aab
+!dist/Ecosystem.apk
 
 # IDE
 .idea/
@@ -22,3 +23,6 @@ android-app/**/build/
 *.p12
 *.keystore
 *.jks
+
+# build output (dist/ is committed on purpose: it holds the installable apps)
+build/

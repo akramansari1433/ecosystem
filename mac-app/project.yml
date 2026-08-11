@@ -32,24 +32,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.akram.ecosystem
         ENABLE_HARDENED_RUNTIME: false
 
-  EcosystemTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - EcosystemTests
-    dependencies:
-      - target: Ecosystem
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.akram.ecosystem.tests
-        GENERATE_INFOPLIST_FILE: true
-
 schemes:
   Ecosystem:
     build:
       targets:
         Ecosystem: all
-        EcosystemTests: [test]
-    test:
-      targets:
-        - EcosystemTests

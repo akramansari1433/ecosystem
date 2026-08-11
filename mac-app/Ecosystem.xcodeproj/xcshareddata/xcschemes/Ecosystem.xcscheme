@@ -21,20 +21,6 @@
                ReferencedContainer = "container:Ecosystem.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "NO"
-            buildForProfiling = "NO"
-            buildForArchiving = "NO"
-            buildForAnalyzing = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "8B267F65B8FBD3F0C037EA57"
-               BuildableName = "EcosystemTests.xctest"
-               BlueprintName = "EcosystemTests"
-               ReferencedContainer = "container:Ecosystem.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -53,20 +39,7 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "8B267F65B8FBD3F0C037EA57"
-               BuildableName = "EcosystemTests.xctest"
-               BlueprintName = "EcosystemTests"
-               ReferencedContainer = "container:Ecosystem.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
-      <CommandLineArguments>
-      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

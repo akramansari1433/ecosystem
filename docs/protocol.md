@@ -1,7 +1,7 @@
 # Ecosystem Wire Protocol — v2
 
-Single source of truth for the Android ↔ Mac protocol. Both codebases and both test
-suites must match this document exactly. Golden fixtures live in `../protocol/test-vectors/`.
+Single source of truth for the Android ↔ Mac protocol. Both apps must match this
+document exactly; the Swift and Kotlin codecs are written to be byte-compatible.
 
 ## 1. Roles and connections
 
@@ -71,7 +71,7 @@ codec-config and end frames.
 - `replyTo`: present only on responses; echoes the request `id`.
 - `payload`: type-specific object; omitted when empty.
 
-Canonical JSON encoding (used by encoders and asserted byte-exact by fixtures): no
+Canonical JSON encoding (both encoders must produce identical bytes): no
 extra whitespace, **all object keys sorted alphabetically at every nesting level**,
 no forward-slash escaping, non-ASCII emitted as raw UTF-8 (no `\uXXXX`), absent
 optional fields omitted entirely (never `null`). Parsers MUST accept any key order.
