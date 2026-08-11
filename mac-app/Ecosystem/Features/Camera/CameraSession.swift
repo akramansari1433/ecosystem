@@ -48,17 +48,17 @@ final class CameraSession {
         cameras.first { $0.id == selectedCameraId }
     }
 
-    /// Zoom steps worth offering for the selected camera, e.g. 1×, 2×, 3×, 5×.
+    /// The zoom factors that reach this camera's physical lenses, as reported by
+    /// the phone — 0.6×, 1×, 3×, 5× on a phone with four back lenses.
     var zoomOptions: [Float] {
-        guard let camera = selectedCamera, camera.zoomCeiling > 1.05 else { return [] }
-        return [1, 2, 3, 5, 10].filter { $0 <= camera.zoomCeiling }
+        selectedCamera?.lensSteps ?? []
     }
 
     /// Empty means "whatever the phone considers its main back camera".
     var selectedCameraId: String = "" {
         didSet {
             guard selectedCameraId != oldValue else { return }
-            zoom = 1
+            zoom = zoomOptions.contains(1) || zoomOptions.isEmpty ? 1 : (zoomOptions.first ?? 1)
             if isActive { restart() }
         }
     }
@@ -136,7 +136,7 @@ final class CameraSession {
                     let reply = try await manager.request(
                         .cameraStart(.init(
                             bitrateBps: 6_000_000, cameraId: selectedCameraId,
-                            fps: 30, width: 1280)),
+                            fps: 30, width: 1280, zoom: zoom)),
                         timeout: 20)
                     if case .cameraStarted(let payload) = reply.message {
                         started = payload

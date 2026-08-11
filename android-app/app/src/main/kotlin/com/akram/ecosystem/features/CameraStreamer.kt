@@ -60,7 +60,8 @@ class CameraStreamer(
     val isRunning: Boolean get() = running
 
     /** Starts the given camera id, or the first back camera when blank. */
-    fun start(requestedId: String) {
+    fun start(requestedId: String, zoom: Float = 1f) {
+        zoomRatio = zoom
         val cameraId = resolveId(requestedId) ?: error("no camera available")
         val size = chooseSize(cameraId)
         height = size.second

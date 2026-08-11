@@ -135,7 +135,9 @@ struct CameraWindow: View {
                 if !session.zoomOptions.isEmpty {
                     Picker("Zoom", selection: $session.zoom) {
                         ForEach(session.zoomOptions, id: \.self) { step in
-                            Text(step == step.rounded() ? "\(Int(step))×" : "\(step)×")
+                            Text(step == step.rounded()
+                                 ? "\(Int(step))×"
+                                 : String(format: "%.1f×", step))
                                 .tag(step)
                         }
                     }

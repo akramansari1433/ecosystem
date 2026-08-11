@@ -124,6 +124,8 @@ data class CameraDeviceInfo(
     /** Telephoto lenses are reached by zooming, not by opening another camera. */
     val maxZoom: Float = 1f,
     val minZoom: Float = 1f,
+    /** Zoom factors that land on this camera's lenses, e.g. 0.6, 1, 3, 5. */
+    val zoomPresets: List<Float> = emptyList(),
 )
 
 @Serializable
@@ -143,6 +145,7 @@ data class CameraStartPayload(
     val cameraId: String = "",
     val fps: Int,
     val width: Int,
+    val zoom: Float = 1f,
 )
 
 @Serializable

@@ -101,8 +101,11 @@ struct CameraDeviceInfo: Codable, Equatable, Hashable, Identifiable {
     /// Optional because the phone omits values equal to their default.
     let maxZoom: Float?
     let minZoom: Float?
+    /// Zoom factors that land on this camera's lenses, e.g. 0.6, 1, 3, 5.
+    let zoomPresets: [Float]?
 
     var zoomCeiling: Float { maxZoom ?? 1 }
+    var lensSteps: [Float] { zoomPresets ?? [] }
 }
 
 struct CameraZoomPayload: Codable, Equatable {
@@ -119,6 +122,8 @@ struct CameraStartPayload: Codable, Equatable {
     let cameraId: String
     let fps: Int
     let width: Int
+    /// Applied as capture starts, so switching lens survives the restart.
+    let zoom: Float
 }
 
 struct CameraStartedPayload: Codable, Equatable {

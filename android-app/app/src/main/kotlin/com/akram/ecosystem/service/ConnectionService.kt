@@ -986,7 +986,7 @@ class ConnectionService : Service() {
                 fps = payload.fps,
                 bitrateBps = payload.bitrateBps,
                 sink = { type, pts, data -> emitCameraFrame(type, pts, data) })
-            streamer.start(payload.cameraId)
+            streamer.start(payload.cameraId, payload.zoom)
             cameraStreamer = streamer
             val token = UUID.randomUUID().toString()
             cameraToken = token
