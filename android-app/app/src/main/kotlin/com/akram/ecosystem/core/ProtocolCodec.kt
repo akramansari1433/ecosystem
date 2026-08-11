@@ -52,7 +52,6 @@ object ProtocolCodec {
             is Message.FsThumbData -> json.encodeToJsonElement(message.payload)
             is Message.MirrorStart -> json.encodeToJsonElement(message.payload)
             is Message.MirrorStarted -> json.encodeToJsonElement(message.payload)
-            is Message.MirrorRotated -> json.encodeToJsonElement(message.payload)
             is Message.InputTap -> json.encodeToJsonElement(message.payload)
             is Message.InputSwipe -> json.encodeToJsonElement(message.payload)
             is Message.InputKey -> json.encodeToJsonElement(message.payload)
@@ -100,7 +99,6 @@ object ProtocolCodec {
             "mirror.needsConsent" -> Message.MirrorNeedsConsent
             "mirror.started" -> Message.MirrorStarted(payload(raw))
             "mirror.stop" -> Message.MirrorStop
-            "mirror.rotated" -> Message.MirrorRotated(payload(raw))
             "input.tap" -> Message.InputTap(payload(raw))
             "input.swipe" -> Message.InputSwipe(payload(raw))
             "input.key" -> Message.InputKey(payload(raw))

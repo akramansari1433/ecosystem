@@ -24,10 +24,6 @@ object PairingSecret {
         file(dir).writeBytes(secret)
     }
 
-    fun clear(dir: File) {
-        file(dir).delete()
-    }
-
     fun newNonce(): ByteArray = ByteArray(32).also { random.nextBytes(it) }
 
     /** HKDF-SHA256(ikm = nonce, salt = peer certificate, info) → 32 bytes. */

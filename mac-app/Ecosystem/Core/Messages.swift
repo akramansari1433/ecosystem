@@ -91,12 +91,6 @@ struct MirrorStartedPayload: Codable, Equatable {
     let width: Int
 }
 
-struct MirrorRotatedPayload: Codable, Equatable {
-    let height: Int
-    let rotationDeg: Int
-    let width: Int
-}
-
 struct AuthChallengePayload: Codable, Equatable {
     let nonce: String
 }
@@ -162,7 +156,6 @@ enum Message: Equatable {
     case mirrorNeedsConsent
     case mirrorStarted(MirrorStartedPayload)
     case mirrorStop
-    case mirrorRotated(MirrorRotatedPayload)
     case inputTap(InputTapPayload)
     case inputSwipe(InputSwipePayload)
     case inputKey(InputKeyPayload)
@@ -201,7 +194,6 @@ enum Message: Equatable {
         case .mirrorNeedsConsent: "mirror.needsConsent"
         case .mirrorStarted: "mirror.started"
         case .mirrorStop: "mirror.stop"
-        case .mirrorRotated: "mirror.rotated"
         case .inputTap: "input.tap"
         case .inputSwipe: "input.swipe"
         case .inputKey: "input.key"

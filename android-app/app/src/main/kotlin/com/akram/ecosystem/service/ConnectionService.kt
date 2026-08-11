@@ -114,13 +114,11 @@ class ConnectionService : Service() {
     private lateinit var deviceId: String
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
-    private val pairedPeerFile: File
-        get() = File(filesDir, "paired-peer.der")
-
     override fun onCreate() {
         super.onCreate()
         instance = this
         identity = Identity.loadOrCreate(filesDir)
+        File(filesDir, "paired-peer.der").delete() // pre-HMAC pairing leftover
         deviceId = deviceIdFor(this)
         advertiser = NsdAdvertiser(this)
         createChannel()
@@ -157,9 +155,7 @@ class ConnectionService : Service() {
             try {
                 // One server for the process lifetime; the trust manager reads the
                 // current pin per handshake, so pairing never changes the port.
-                // Peers are authenticated at the application layer (HMAC), so the
-                // TLS server no longer asks for or pins a client certificate.
-                val server = TlsServer(identity) { null }.listen()
+                val server = TlsServer(identity).listen()
                 serverSocket = server
                 advertiser.register(server.localPort, deviceId, deviceName(), PROTOCOL_VERSION)
                 Log.i(TAG, "listening on ${server.localPort}")
@@ -248,10 +244,6 @@ class ConnectionService : Service() {
                 @OptIn(ExperimentalStdlibApi::class)
                 sendMessage(Message.AuthChallenge(
                     com.akram.ecosystem.core.AuthChallengePayload(nonce.toHexString())))
-            } else {
-                pairingEngine = PairingEngine(
-                    PairingEngine.Role.RESPONDER,
-                    ownDer = identity.certDer, peerDer = ByteArray(0))
             }
             pending.forEach { dispatch(it) }
             val input = socket.inputStream
@@ -283,7 +275,7 @@ class ConnectionService : Service() {
         // Everything except the handshake requires an authenticated peer.
         if (PairingSecret.load(filesDir) != null && !authenticated) {
             when (message) {
-                is Message.AuthResponse, Message.Ping, is Message.Hello -> Unit
+                is Message.AuthResponse, Message.Ping -> Unit
                 else -> {
                     Log.w(TAG, "dropping ${message.typeString} before auth")
                     return
@@ -291,16 +283,6 @@ class ConnectionService : Service() {
             }
         }
         when (val m = message) {
-            is Message.Hello -> {
-                if (m.payload.protocolVersion != PROTOCOL_VERSION) {
-                    sendMessage(Message.Error(
-                        com.akram.ecosystem.core.ErrorPayload("version_mismatch")))
-                    session?.close()
-                    return
-                }
-                _state.value = _state.value.copy(connected = true, peerName = m.payload.name)
-                updateNotification("Connected to ${m.payload.name}")
-            }
             is Message.AuthResponse -> {
                 val nonce = authChallenge
                 val secret = PairingSecret.load(filesDir)
@@ -612,15 +594,6 @@ class ConnectionService : Service() {
                 }
             }
         }
-    }
-
-    /** Clears the pairing so a new Mac can pair (Settings action). */
-    fun unpair() {
-        pairedPeerFile.delete()
-        PairingSecret.clear(filesDir)
-        authenticated = false
-        session?.close()
-        _state.value = _state.value.copy(paired = false)
     }
 
     // MARK: clipboard

@@ -1,4 +1,4 @@
-# Ecosystem Wire Protocol — v1
+# Ecosystem Wire Protocol — v2
 
 Single source of truth for the Android ↔ Mac protocol. Both codebases and both test
 suites must match this document exactly. Golden fixtures live in `../protocol/test-vectors/`.
@@ -13,9 +13,10 @@ suites must match this document exactly. Golden fixtures live in `../protocol/te
   - zero or more **stream connections** (file transfer, video), each dialing the same
     port and immediately sending `stream.attach`.
 
-TLS: both sides use long-lived self-signed P-256 certificates. Before pairing, peers
-accept any certificate but capture the leaf. After pairing, both sides require an
-exact DER byte match of the pinned peer certificate.
+TLS: the phone holds a long-lived self-signed P-256 certificate and presents it as
+the server; no client certificate is used. The Mac captures the leaf during pairing
+and afterwards requires an exact DER byte match. The Mac proves its own identity at
+the application layer (§5.1), which keeps macOS keychains out of the picture.
 
 ## 2. Framing
 
@@ -89,26 +90,41 @@ replies nothing and switches to binary framing).
 | `pong` | reply | — |
 | `error` | both | `{ code, message? }` |
 
-- `protocolVersion`: integer, currently `1`. On mismatch, send
+- `protocolVersion`: integer, currently `2`. On mismatch, send
   `error { code: "version_mismatch" }` and close.
-- `capabilities`: array of strings from `["clipboard","ring","fs","mirror","camera"]`.
+- `capabilities`: strings from `["clipboard","ring","fs","mirror","input"]`. The phone
+  advertises `input` only while its accessibility service is connected.
 - Dead peer: no frame for 30 s → close and (Mac) reconnect with backoff.
 
 ## 5. Pairing (TOFU + verification code)
 
 States: `idle → requested → codeDisplayed → confirmedLocal → paired | failed`.
 
-1. Mac (unpaired) connects, sends `hello`, then `pair.request { certFingerprint }`
-   where `certFingerprint` = lowercase hex SHA-256 of the Mac's leaf cert DER.
+1. Mac (unpaired) connects, sends `hello`, then `pair.request { certFingerprint }`,
+   where the field carries a fresh 32-byte random **nonce** as lowercase hex.
 2. Android shows accept/reject UI → `pair.accept` or `pair.reject`.
-3. On accept, **both sides independently compute the verification code**:
-   `code = uint24(first 3 bytes of SHA-256(concat(sorted([DER_A, DER_B])))) mod 1000000`,
+3. On accept, **both sides independently compute the verification code** from the
+   nonce and the phone's certificate:
+   `code = uint24(first 3 bytes of SHA-256(concat(sorted([nonce, phoneCertDER])))) mod 1000000`,
    rendered as a zero-padded 6-digit decimal string. `sorted` = lexicographic byte
-   order of the two DER blobs, smaller first.
+   order of the two blobs, smaller first.
 4. Both display the code. User confirms on each device → each sends `pair.confirm`.
-5. After sending AND receiving `pair.confirm`, each side persists the peer cert and
-   the connection is closed. Subsequent connections are pinned.
+5. After sending AND receiving `pair.confirm`, both derive the shared secret
+   `HKDF-SHA256(ikm = nonce, salt = phoneCertDER, info = "ecosystem-auth-v1")` → 32
+   bytes, persist it (the Mac also pins the phone's certificate), and the connection
+   is closed so the next one runs authenticated.
 6. Any party may send `pair.abort { reason? }` at any point → state `failed`.
+
+### 5.1 Per-connection authentication
+
+Once paired, the phone challenges every new control connection and refuses all other
+message types until it succeeds.
+
+| type | direction | payload |
+|---|---|---|
+| `auth.challenge` | phone → Mac | `{ nonce }` (32 random bytes, hex) |
+| `auth.response` | Mac → phone | `{ mac }` = hex HMAC-SHA256(secret, nonce) |
+| `auth.ok` | phone → Mac | — |
 
 | type | payload |
 |---|---|
@@ -142,6 +158,9 @@ States: `idle → requested → codeDisplayed → confirmedLocal → paired | fa
 | type | direction | payload |
 |---|---|---|
 | `fs.list` | Mac → phone | `{ path }` |
+| `fs.search` | Mac → phone | `{ path, kinds: ["image"\|"video"], maxDepth }` — recursive; entries carry `relPath` |
+| `fs.thumb` | Mac → phone | `{ path, maxEdge }` |
+| `fs.thumbData` | reply | `{ dataBase64? }` (JPEG; absent when none could be made) |
 | `fs.entries` | reply | `{ entries: [{ name, isDir, size, mtimeMillis }] }` |
 | `fs.download` | Mac → phone | `{ path }` |
 | `fs.upload` | Mac → phone | `{ destPath, size }` |
@@ -172,12 +191,23 @@ States: `idle → requested → codeDisplayed → confirmedLocal → paired | fa
 | `mirror.needsConsent` | reply | — (phone surfaces the MediaProjection dialog) |
 | `mirror.started` | reply | `{ token, width, height, rotationDeg }` |
 | `mirror.stop` | both | — |
-| `mirror.rotated` | phone → Mac | `{ width, height, rotationDeg }` |
 
 Video flows on a stream connection (`kind: "mirror"`): frameType 0 config, then 1/2
 frames. Phone resends config before every keyframe.
 
-## 11. Camera (M4)
+## 12. Input
+
+Coordinates are normalized 0…1 with the origin at the screen's top-left, so they are
+independent of resolution and rotation. Requires the phone's accessibility service.
+
+| type | direction | payload |
+|---|---|---|
+| `input.tap` | Mac → phone | `{ x, y, longPress }` |
+| `input.swipe` | Mac → phone | `{ x1, y1, x2, y2, durationMs }` |
+| `input.text` | Mac → phone | `{ text }` (typed into the focused field) |
+| `input.key` | Mac → phone | `{ key }`: `back`, `home`, `recents`, `notifications`, `lock`, `enter`, `backspace`, `dim.on`, `dim.off` |
+
+## 13. Camera (M4, planned)
 
 | type | direction | payload |
 |---|---|---|

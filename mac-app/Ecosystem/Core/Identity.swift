@@ -1,6 +1,5 @@
 import CryptoKit
 import Foundation
-import Security
 
 /// Pairing credentials for this Mac.
 ///
@@ -46,11 +45,6 @@ struct PairingStore {
             [.posixPermissions: 0o600], ofItemAtPath: secretURL.path)
     }
 
-    static func clear() {
-        try? FileManager.default.removeItem(at: peerCertURL)
-        try? FileManager.default.removeItem(at: secretURL)
-    }
-
     /// Both devices derive the same secret from the phone's certificate and the
     /// nonce the Mac sent in `pair.request` — no extra round trip, and the
     /// verification code the user compared covers both inputs.
@@ -64,24 +58,5 @@ struct PairingStore {
 
     static func authResponse(nonce: Data, secret: SymmetricKey) -> String {
         Data(HMAC<SHA256>.authenticationCode(for: nonce, using: secret)).hexString
-    }
-
-    /// Removes keychains created by earlier builds so macOS stops asking to
-    /// unlock them. Safe to call on every launch.
-    static func removeLegacyKeychains() {
-        for name in ["ecosystem.keychain-db", "ecosystem-v2.keychain-db"] {
-            let path = directory.appendingPathComponent(name).path
-            guard FileManager.default.fileExists(atPath: path) else { continue }
-            var keychain: SecKeychain?
-            if SecKeychainOpen(path, &keychain) == errSecSuccess, let keychain {
-                SecKeychainDelete(keychain)
-            }
-            try? FileManager.default.removeItem(atPath: path)
-        }
-        // Also drop the old client-certificate material; it is no longer used.
-        for name in ["identity-key.raw", "identity-cert.der"] {
-            try? FileManager.default.removeItem(
-                at: directory.appendingPathComponent(name))
-        }
     }
 }

@@ -45,7 +45,7 @@ final class MirrorSession {
         Task { await stream?.closeStream() }
         stream = nil
         manager.send(.mirrorStop)
-        displayLayer.flushAndRemoveImage()
+        displayLayer.sampleBufferRenderer.flush(removingDisplayedImage: true) {}
         phase = .idle
     }
 
@@ -122,16 +122,16 @@ final class MirrorSession {
                         let size = CGSize(width: Int(dims.width), height: Int(dims.height))
                         if size != videoSize {
                             videoSize = size
-                            displayLayer.flush()
+                            displayLayer.sampleBufferRenderer.flush()
                         }
                     }
                 case BinaryFrames.typeKeyframe, BinaryFrames.typeDelta:
                     let sample = try assembler.makeSampleBuffer(
                         payload: frame.payload, ptsMicros: frame.ptsMicros)
-                    if displayLayer.status == .failed {
-                        displayLayer.flush()
+                    if displayLayer.sampleBufferRenderer.status == .failed {
+                        displayLayer.sampleBufferRenderer.flush()
                     }
-                    displayLayer.enqueue(sample)
+                    displayLayer.sampleBufferRenderer.enqueue(sample)
                 default:
                     break
                 }

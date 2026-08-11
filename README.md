@@ -10,9 +10,9 @@ same Wi-Fi network — no cables, no cloud.
 | Auto-discovery + one-time pairing (TLS, pinned certs) | ✅ |
 | Clipboard sync (both directions) | ✅ automatic |
 | Ring my phone | ✅ |
-| Browse phone files from the Mac | 🚧 M2 |
-| Screen mirroring in a Mac window | ⏳ M3 |
-| Phone camera as a real system webcam (Zoom/Meet/FaceTime) | ⏳ M4 |
+| Browse phone files from the Mac | ✅ |
+| Screen mirroring in a Mac window | ✅ with touch + keyboard control |
+| Phone camera as a real system webcam (Zoom/Meet/FaceTime) | 🚧 M4 |
 
 ## Layout
 

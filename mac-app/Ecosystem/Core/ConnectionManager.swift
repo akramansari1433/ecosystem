@@ -48,7 +48,6 @@ final class ConnectionManager {
     }
 
     func start() {
-        PairingStore.removeLegacyKeychains()
         appState.paired = PairingStore.isPaired
         appState.status = .searching
         clipboard.onLocalCopy = { [weak self] payload in
@@ -273,7 +272,7 @@ final class ConnectionManager {
             SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!)
         }
         pairingNonce = nonce
-        let engine = PairingEngine(role: .initiator, ownDer: nonce, peerDer: currentPeerDER)
+        let engine = PairingEngine(ownDer: nonce, peerDer: currentPeerDER)
         pairingEngine = engine
         appState.status = .pairing
         Task { await runPairingEffects(engine.handle(.start), conn: connection) }
@@ -319,16 +318,8 @@ final class ConnectionManager {
                 appState.pairingCode = nil
                 appState.status = .error("Pairing failed: \(reason)")
                 pairingNonce = nil
-            case .showAcceptPrompt:
-                break // responder-only
             }
         }
-    }
-
-    func unpair() {
-        PairingStore.clear()
-        appState.paired = false
-        Task { await connection?.close() }
     }
 
     // MARK: outbound commands
