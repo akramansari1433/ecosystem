@@ -1,4 +1,7 @@
+import os
 import SwiftUI
+
+private let appLog = Logger(subsystem: "com.akram.ecosystem", category: "app")
 
 @main
 struct EcosystemApp: App {
@@ -17,6 +20,7 @@ struct EcosystemApp: App {
             manager.start()
         }
         AppServices.manager = manager
+        appLog.info("app scene init")
     }
 
     var body: some Scene {

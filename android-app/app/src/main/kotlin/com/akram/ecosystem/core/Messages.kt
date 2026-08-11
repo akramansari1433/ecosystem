@@ -148,6 +148,8 @@ data class CameraStartPayload(
 @Serializable
 data class CameraStartedPayload(
     val height: Int,
+    /** Degrees the Mac must rotate the picture: camera sensors are mounted sideways. */
+    val rotationDeg: Int = 0,
     val token: String,
     val width: Int,
 )

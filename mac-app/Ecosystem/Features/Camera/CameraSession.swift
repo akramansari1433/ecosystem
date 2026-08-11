@@ -22,6 +22,15 @@ final class CameraSession {
 
     var phase: Phase = .idle
     var videoSize = CGSize(width: 16, height: 9)
+    /// Rotation the phone asked for, applied when displaying.
+    var rotationDeg: Int = 0
+
+    /// Size as shown, with width and height swapped for a quarter turn.
+    var displaySize: CGSize {
+        rotationDeg % 180 == 0
+            ? videoSize
+            : CGSize(width: videoSize.height, height: videoSize.width)
+    }
 
     /// Every camera the phone will let us open, e.g. ultra wide, main, telephoto.
     var cameras: [CameraDeviceInfo] = []
@@ -41,8 +50,8 @@ final class CameraSession {
 
     /// Zoom steps worth offering for the selected camera, e.g. 1×, 2×, 3×, 5×.
     var zoomOptions: [Float] {
-        guard let camera = selectedCamera, camera.maxZoom > 1.05 else { return [] }
-        return [1, 2, 3, 5, 10].filter { $0 <= camera.maxZoom }
+        guard let camera = selectedCamera, camera.zoomCeiling > 1.05 else { return [] }
+        return [1, 2, 3, 5, 10].filter { $0 <= camera.zoomCeiling }
     }
 
     /// Empty means "whatever the phone considers its main back camera".
@@ -74,6 +83,10 @@ final class CameraSession {
     }
 
     /// Asks the phone which cameras it has, so the picker shows real options.
+    func refreshCameras() async {
+        await loadCameras()
+    }
+
     private func loadCameras() async {
         guard let reply = try? await manager.request(.cameraList, timeout: 8),
               case .cameraCameras(let payload) = reply.message else { return }
@@ -141,6 +154,7 @@ final class CameraSession {
                 return
             }
             videoSize = CGSize(width: started.width, height: started.height)
+            rotationDeg = (((started.rotationDeg ?? 0) % 360) + 360) % 360
 
             let stream = try manager.openStream()
             self.stream = stream

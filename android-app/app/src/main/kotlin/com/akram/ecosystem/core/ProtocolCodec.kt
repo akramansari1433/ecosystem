@@ -22,6 +22,9 @@ object ProtocolCodec {
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
+        // Without this, any field equal to its default is left out of the JSON,
+        // and the other side sees a message with missing keys.
+        encodeDefaults = true
     }
 
     @Serializable

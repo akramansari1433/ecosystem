@@ -995,7 +995,8 @@ class ConnectionService : Service() {
             updateNotification("Camera streaming to your Mac")
             sendMessage(Message.CameraStarted(
                 com.akram.ecosystem.core.CameraStartedPayload(
-                    height = streamer.height, token = token, width = payload.width)),
+                    height = streamer.height, rotationDeg = streamer.rotationDeg,
+                    token = token, width = payload.width)),
                 replyTo = requestId)
         } catch (t: Throwable) {
             Log.e(TAG, "camera start failed", t)

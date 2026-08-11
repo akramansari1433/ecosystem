@@ -53,6 +53,10 @@ class CameraStreamer(
     var height: Int = 0
         private set
 
+    /** Sensor mounting angle, so the viewer can turn the picture upright. */
+    var rotationDeg: Int = 0
+        private set
+
     val isRunning: Boolean get() = running
 
     /** Starts the given camera id, or the first back camera when blank. */
@@ -60,6 +64,8 @@ class CameraStreamer(
         val cameraId = resolveId(requestedId) ?: error("no camera available")
         val size = chooseSize(cameraId)
         height = size.second
+        rotationDeg = cameraManager.getCameraCharacteristics(cameraId)
+            .get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
         // Must be set before the drain thread starts: it loops on this flag, and
         // if it sees false it exits and releases the surface the camera is about
         // to configure — which surfaced as "Error configuring streams: Broken pipe".

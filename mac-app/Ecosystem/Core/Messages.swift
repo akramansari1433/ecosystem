@@ -98,8 +98,11 @@ struct CameraDeviceInfo: Codable, Equatable, Hashable, Identifiable {
     /// Human label, e.g. "Ultra wide".
     let label: String
     /// Telephoto lenses are reached by zooming, not by opening another camera.
-    let maxZoom: Float
-    let minZoom: Float
+    /// Optional because the phone omits values equal to their default.
+    let maxZoom: Float?
+    let minZoom: Float?
+
+    var zoomCeiling: Float { maxZoom ?? 1 }
 }
 
 struct CameraZoomPayload: Codable, Equatable {
@@ -120,6 +123,9 @@ struct CameraStartPayload: Codable, Equatable {
 
 struct CameraStartedPayload: Codable, Equatable {
     let height: Int
+    /// Degrees to rotate the picture: camera sensors are mounted sideways.
+    /// Absent when zero, since the phone omits defaults.
+    let rotationDeg: Int?
     let token: String
     let width: Int
 }

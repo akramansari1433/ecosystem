@@ -124,10 +124,10 @@ actor ControlConnection {
             receiveLoop()
             startPing()
         case .waiting:
-            // Connection refused or unreachable (e.g. stale Bonjour record after the
-            // phone re-registered). NWConnection would idle here indefinitely; fail
-            // fast so the manager re-dials with fresh resolution and backoff.
-            finish()
+            // Transient: routes change, and a second connection to the same
+            // Bonjour service makes the path be re-evaluated. Only give up if
+            // this connection never became usable in the first place.
+            if !isReady { finish() }
         case .failed, .cancelled:
             finish()
         default:
@@ -147,8 +147,13 @@ actor ControlConnection {
                     if let data, !data.isEmpty {
                         try await self.ingest(data)
                     }
-                    if isComplete { break }
+                    if isComplete {
+                        log.info("receive loop: peer finished the stream")
+                        break
+                    }
                 } catch {
+                    log.warning(
+                        "receive loop error: \(error, privacy: .public)")
                     break
                 }
             }
@@ -173,8 +178,14 @@ actor ControlConnection {
 
     private func ingest(_ data: Data) throws {
         lastReceived = Date()
+        // Framing errors are fatal — the stream position is lost — but a single
+        // frame we cannot decode is not: skip it and keep the connection.
         for frame in try reader.append(data) {
-            continuation?.yield(.message(try ProtocolCodec.decodeFrame(frame)))
+            do {
+                continuation?.yield(.message(try ProtocolCodec.decodeFrame(frame)))
+            } catch {
+                log.warning("skipping undecodable frame: \(error, privacy: .public)")
+            }
         }
     }
 
