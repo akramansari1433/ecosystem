@@ -17,22 +17,40 @@ final class CameraSession {
         case failed(String)
     }
 
-    enum Lens: String, CaseIterable, Identifiable {
-        case back, front
-        var id: String { rawValue }
-        var label: String { self == .back ? "Back camera" : "Front camera" }
-    }
-
     private unowned let manager: ConnectionManager
     let displayLayer = AVSampleBufferDisplayLayer()
 
     var phase: Phase = .idle
     var videoSize = CGSize(width: 16, height: 9)
-    var lens: Lens = .back {
+
+    /// Every camera the phone will let us open, e.g. ultra wide, main, telephoto.
+    var cameras: [CameraDeviceInfo] = []
+
+    /// Zoom on the selected camera. Values above 1 hand over to the telephoto
+    /// lenses, which Samsung does not expose as separate cameras.
+    var zoom: Float = 1 {
         didSet {
-            guard lens != oldValue, phase == .streaming else { return }
-            manager.send(.cameraSwitchLens(.init(lens: lens.rawValue)))
-            restart()
+            guard zoom != oldValue, phase == .streaming else { return }
+            manager.send(.cameraZoom(.init(ratio: zoom)))
+        }
+    }
+
+    var selectedCamera: CameraDeviceInfo? {
+        cameras.first { $0.id == selectedCameraId }
+    }
+
+    /// Zoom steps worth offering for the selected camera, e.g. 1×, 2×, 3×, 5×.
+    var zoomOptions: [Float] {
+        guard let camera = selectedCamera, camera.maxZoom > 1.05 else { return [] }
+        return [1, 2, 3, 5, 10].filter { $0 <= camera.maxZoom }
+    }
+
+    /// Empty means "whatever the phone considers its main back camera".
+    var selectedCameraId: String = "" {
+        didSet {
+            guard selectedCameraId != oldValue else { return }
+            zoom = 1
+            if isActive { restart() }
         }
     }
 
@@ -49,7 +67,21 @@ final class CameraSession {
     func start() {
         guard !isActive else { return }
         phase = .starting
-        streamTask = Task { await run() }
+        streamTask = Task {
+            await loadCameras()
+            await run()
+        }
+    }
+
+    /// Asks the phone which cameras it has, so the picker shows real options.
+    private func loadCameras() async {
+        guard let reply = try? await manager.request(.cameraList, timeout: 8),
+              case .cameraCameras(let payload) = reply.message else { return }
+        cameras = payload.cameras
+        if selectedCameraId.isEmpty || !payload.cameras.contains(
+            where: { $0.id == selectedCameraId }) {
+            selectedCameraId = payload.cameras.first?.id ?? ""
+        }
     }
 
     func stop() {
@@ -63,7 +95,7 @@ final class CameraSession {
         phase = .idle
     }
 
-    /// Switching lens restarts capture on the phone, so the stream is rebuilt.
+    /// Choosing another camera restarts capture on the phone.
     private func restart() {
         streamTask?.cancel()
         let stream = self.stream
@@ -71,7 +103,8 @@ final class CameraSession {
         Task { await stream?.closeStream() }
         phase = .starting
         streamTask = Task {
-            try? await Task.sleep(for: .milliseconds(400))
+            await stream?.closeStream()
+            try? await Task.sleep(for: .milliseconds(500))
             await run()
         }
     }
@@ -89,8 +122,8 @@ final class CameraSession {
                 do {
                     let reply = try await manager.request(
                         .cameraStart(.init(
-                            bitrateBps: 6_000_000, fps: 30,
-                            lens: lens.rawValue, width: 1280)),
+                            bitrateBps: 6_000_000, cameraId: selectedCameraId,
+                            fps: 30, width: 1280)),
                         timeout: 20)
                     if case .cameraStarted(let payload) = reply.message {
                         started = payload

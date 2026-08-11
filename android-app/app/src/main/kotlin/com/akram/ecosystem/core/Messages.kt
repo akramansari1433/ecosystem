@@ -115,11 +115,33 @@ data class MirrorStartedPayload(
 // Input coordinates are normalized 0..1 relative to the screen, so they're
 // independent of resolution and rotation. See docs/protocol.md §12.
 @Serializable
+data class CameraDeviceInfo(
+    /** "back" or "front". */
+    val facing: String,
+    val id: String,
+    /** Human label, e.g. "Ultra wide". */
+    val label: String,
+    /** Telephoto lenses are reached by zooming, not by opening another camera. */
+    val maxZoom: Float = 1f,
+    val minZoom: Float = 1f,
+)
+
+@Serializable
+data class CameraZoomPayload(
+    val ratio: Float,
+)
+
+@Serializable
+data class CameraListPayload(
+    val cameras: List<CameraDeviceInfo>,
+)
+
+@Serializable
 data class CameraStartPayload(
     val bitrateBps: Int,
+    /** Camera id from camera.cameras; empty means "first back camera". */
+    val cameraId: String = "",
     val fps: Int,
-    /** "back" or "front". */
-    val lens: String,
     val width: Int,
 )
 
@@ -128,11 +150,6 @@ data class CameraStartedPayload(
     val height: Int,
     val token: String,
     val width: Int,
-)
-
-@Serializable
-data class CameraLensPayload(
-    val lens: String,
 )
 
 @Serializable
@@ -223,7 +240,9 @@ sealed interface Message {
     data class InputScroll(val payload: InputScrollPayload) : Message
     data class CameraStart(val payload: CameraStartPayload) : Message
     data class CameraStarted(val payload: CameraStartedPayload) : Message
-    data class CameraSwitchLens(val payload: CameraLensPayload) : Message
+    data object CameraList : Message
+    data class CameraZoom(val payload: CameraZoomPayload) : Message
+    data class CameraCameras(val payload: CameraListPayload) : Message
     data object CameraStop : Message
     data class AuthChallenge(val payload: AuthChallengePayload) : Message
     data class AuthResponse(val payload: AuthResponsePayload) : Message
@@ -266,7 +285,9 @@ sealed interface Message {
             is InputScroll -> "input.scroll"
             is CameraStart -> "camera.start"
             is CameraStarted -> "camera.started"
-            is CameraSwitchLens -> "camera.switchLens"
+            CameraList -> "camera.list"
+            is CameraZoom -> "camera.zoom"
+            is CameraCameras -> "camera.cameras"
             CameraStop -> "camera.stop"
             is AuthChallenge -> "auth.challenge"
             is AuthResponse -> "auth.response"

@@ -91,11 +91,30 @@ struct MirrorStartedPayload: Codable, Equatable {
     let width: Int
 }
 
+struct CameraDeviceInfo: Codable, Equatable, Hashable, Identifiable {
+    /// "back" or "front".
+    let facing: String
+    let id: String
+    /// Human label, e.g. "Ultra wide".
+    let label: String
+    /// Telephoto lenses are reached by zooming, not by opening another camera.
+    let maxZoom: Float
+    let minZoom: Float
+}
+
+struct CameraZoomPayload: Codable, Equatable {
+    let ratio: Float
+}
+
+struct CameraListPayload: Codable, Equatable {
+    let cameras: [CameraDeviceInfo]
+}
+
 struct CameraStartPayload: Codable, Equatable {
     let bitrateBps: Int
+    /// Camera id from camera.cameras; empty means "first back camera".
+    let cameraId: String
     let fps: Int
-    /// "back" or "front".
-    let lens: String
     let width: Int
 }
 
@@ -103,10 +122,6 @@ struct CameraStartedPayload: Codable, Equatable {
     let height: Int
     let token: String
     let width: Int
-}
-
-struct CameraLensPayload: Codable, Equatable {
-    let lens: String
 }
 
 struct AuthChallengePayload: Codable, Equatable {
@@ -188,7 +203,9 @@ enum Message: Equatable {
     case inputScroll(InputScrollPayload)
     case cameraStart(CameraStartPayload)
     case cameraStarted(CameraStartedPayload)
-    case cameraSwitchLens(CameraLensPayload)
+    case cameraList
+    case cameraZoom(CameraZoomPayload)
+    case cameraCameras(CameraListPayload)
     case cameraStop
     case authChallenge(AuthChallengePayload)
     case authResponse(AuthResponsePayload)
@@ -231,7 +248,9 @@ enum Message: Equatable {
         case .inputScroll: "input.scroll"
         case .cameraStart: "camera.start"
         case .cameraStarted: "camera.started"
-        case .cameraSwitchLens: "camera.switchLens"
+        case .cameraList: "camera.list"
+        case .cameraZoom: "camera.zoom"
+        case .cameraCameras: "camera.cameras"
         case .cameraStop: "camera.stop"
         case .authChallenge: "auth.challenge"
         case .authResponse: "auth.response"

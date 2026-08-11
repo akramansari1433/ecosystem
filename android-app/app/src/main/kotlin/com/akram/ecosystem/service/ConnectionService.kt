@@ -322,7 +322,11 @@ class ConnectionService : Service() {
             is Message.MirrorStart -> handleMirrorStart(envelope.id, m.payload)
             Message.MirrorStop -> pauseMirroring()
             is Message.CameraStart -> handleCameraStart(envelope.id, m.payload)
-            is Message.CameraSwitchLens -> handleCameraSwitchLens(m.payload.lens)
+            Message.CameraList -> sendMessage(
+                Message.CameraCameras(com.akram.ecosystem.core.CameraListPayload(
+                    com.akram.ecosystem.features.CameraCatalog.list(this))),
+                replyTo = envelope.id)
+            is Message.CameraZoom -> cameraStreamer?.setZoom(m.payload.ratio)
             Message.CameraStop -> stopCamera()
             is Message.InputTap -> {
                 val (w, h) = screenSize()
@@ -903,7 +907,6 @@ class ConnectionService : Service() {
 
     private var cameraStreamer: com.akram.ecosystem.features.CameraStreamer? = null
     private var cameraToken: String? = null
-    private var cameraLens = "back"
     private var cameraRequest: com.akram.ecosystem.core.CameraStartPayload? = null
     @Volatile
     private var cameraSocket: SSLSocket? = null
@@ -959,7 +962,6 @@ class ConnectionService : Service() {
         }
         stopCamera()
         cameraRequest = payload
-        cameraLens = payload.lens
         try {
             startForeground(
                 NOTIFICATION_ID, buildNotification("Camera streaming to your Mac"),
@@ -971,7 +973,7 @@ class ConnectionService : Service() {
                 fps = payload.fps,
                 bitrateBps = payload.bitrateBps,
                 sink = { type, pts, data -> emitCameraFrame(type, pts, data) })
-            streamer.start(payload.lens)
+            streamer.start(payload.cameraId)
             cameraStreamer = streamer
             val token = UUID.randomUUID().toString()
             cameraToken = token
@@ -988,12 +990,6 @@ class ConnectionService : Service() {
             sendMessage(Message.Error(ErrorPayload("camera_error", t.message)),
                 replyTo = requestId)
         }
-    }
-
-    private fun handleCameraSwitchLens(lens: String) {
-        val request = cameraRequest ?: return
-        val id = UUID.randomUUID().toString()
-        handleCameraStart(id, request.copy(lens = lens))
     }
 
     private fun emitCameraFrame(type: Int, pts: Long, data: ByteArray) {

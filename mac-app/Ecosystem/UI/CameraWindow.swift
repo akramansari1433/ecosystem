@@ -77,12 +77,32 @@ struct CameraWindow: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            Picker("Lens", selection: $session.lens) {
-                ForEach(CameraSession.Lens.allCases) { Text($0.label).tag($0) }
+            if session.cameras.isEmpty {
+                Text("No cameras reported").foregroundStyle(.secondary)
+            } else {
+                Picker("Camera", selection: $session.selectedCameraId) {
+                    ForEach(session.cameras) { camera in
+                        Text(camera.label).tag(camera.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 200)
+                .disabled(!session.isActive)
+
+                if !session.zoomOptions.isEmpty {
+                    Picker("Zoom", selection: $session.zoom) {
+                        ForEach(session.zoomOptions, id: \.self) { step in
+                            Text(step == step.rounded() ? "\(Int(step))×" : "\(step)×")
+                                .tag(step)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 200)
+                    .disabled(session.phase != .streaming)
+                    .help("Zooming switches to the telephoto lenses")
+                }
             }
-            .pickerStyle(.segmented)
-            .frame(width: 260)
-            .disabled(!session.isActive)
 
             Spacer()
 

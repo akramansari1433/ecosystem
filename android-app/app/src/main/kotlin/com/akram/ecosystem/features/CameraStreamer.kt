@@ -46,15 +46,18 @@ class CameraStreamer(
     private var device: CameraDevice? = null
     private var session: CameraCaptureSession? = null
     private var configFrame: ByteArray? = null
+    private var requestBuilder: android.hardware.camera2.CaptureRequest.Builder? = null
+    @Volatile
+    private var zoomRatio = 1f
 
     var height: Int = 0
         private set
 
     val isRunning: Boolean get() = running
 
-    /** Resolution actually chosen, once [start] has returned. */
-    fun start(lens: String) {
-        val cameraId = cameraId(lens) ?: error("no $lens camera")
+    /** Starts the given camera id, or the first back camera when blank. */
+    fun start(requestedId: String) {
+        val cameraId = resolveId(requestedId) ?: error("no camera available")
         val size = chooseSize(cameraId)
         height = size.second
         // Must be set before the drain thread starts: it loops on this flag, and
@@ -63,7 +66,7 @@ class CameraStreamer(
         running = true
         startEncoder(size.first, size.second)
         openCamera(cameraId)
-        Log.i(TAG, "camera $lens starting ${size.first}x${size.second} @${fps}fps")
+        Log.i(TAG, "camera $cameraId starting ${size.first}x${size.second} @${fps}fps")
     }
 
     fun stop() {
@@ -80,6 +83,21 @@ class CameraStreamer(
 
     fun cachedConfig(): ByteArray? = configFrame
 
+    /**
+     * Zooming is how the telephoto lenses are reached: Android switches to them
+     * behind the scenes, exactly as the phone's own camera app does.
+     */
+    fun setZoom(ratio: Float) {
+        zoomRatio = ratio
+        handler.post {
+            val builder = requestBuilder ?: return@post
+            val session = session ?: return@post
+            builder.set(CaptureRequest.CONTROL_ZOOM_RATIO, ratio)
+            runCatching { session.setRepeatingRequest(builder.build(), null, handler) }
+                .onFailure { Log.w(TAG, "zoom failed: $it") }
+        }
+    }
+
     fun requestKeyframe() {
         runCatching {
             codec?.setParameters(android.os.Bundle().apply {
@@ -88,16 +106,14 @@ class CameraStreamer(
         }
     }
 
-    private fun cameraId(lens: String): String? {
-        val wanted = if (lens == "front") {
-            CameraCharacteristics.LENS_FACING_FRONT
-        } else {
-            CameraCharacteristics.LENS_FACING_BACK
-        }
-        return cameraManager.cameraIdList.firstOrNull {
+    private fun resolveId(requestedId: String): String? {
+        val ids = cameraManager.cameraIdList
+        if (requestedId.isNotEmpty() && requestedId in ids) return requestedId
+        return ids.firstOrNull {
             cameraManager.getCameraCharacteristics(it)
-                .get(CameraCharacteristics.LENS_FACING) == wanted
-        } ?: cameraManager.cameraIdList.firstOrNull()
+                .get(CameraCharacteristics.LENS_FACING) ==
+                CameraCharacteristics.LENS_FACING_BACK
+        } ?: ids.firstOrNull()
     }
 
     /** Nearest supported encoder size to the requested width, 16:9 preferred. */
@@ -155,16 +171,17 @@ class CameraStreamer(
                         override fun onConfigured(configured: CameraCaptureSession) {
                             Log.i(TAG, "capture session configured")
                             session = configured
-                            val request = camera
+                            val builder = camera
                                 .createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
                                 .apply {
                                     addTarget(surface)
                                     set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
                                         Range(fps, fps))
+                                    set(CaptureRequest.CONTROL_ZOOM_RATIO, zoomRatio)
                                 }
-                                .build()
+                            requestBuilder = builder
                             runCatching {
-                                configured.setRepeatingRequest(request, null, handler)
+                                configured.setRepeatingRequest(builder.build(), null, handler)
                             }.onFailure { Log.e(TAG, "repeating request failed", it) }
                         }
 

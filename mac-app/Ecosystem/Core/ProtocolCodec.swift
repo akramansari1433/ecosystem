@@ -67,12 +67,13 @@ enum ProtocolCodec {
         case .inputScroll(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .cameraStart(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .cameraStarted(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
-        case .cameraSwitchLens(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .cameraCameras(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .cameraZoom(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .authChallenge(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .authResponse(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .ping, .pong, .pairAccept, .pairReject, .pairConfirm,
              .ringStart, .ringStop, .ringStopped, .unknown,
-             .mirrorNeedsConsent, .mirrorStop, .authOK, .cameraStop:
+             .mirrorNeedsConsent, .mirrorStop, .authOK, .cameraStop, .cameraList:
             body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString,
                                   payload: nil as NoPayload?)
         }
@@ -140,7 +141,9 @@ enum ProtocolCodec {
         case "input.scroll": message = .inputScroll(try payload(from: data, type: header.type))
         case "camera.start": message = .cameraStart(try payload(from: data, type: header.type))
         case "camera.started": message = .cameraStarted(try payload(from: data, type: header.type))
-        case "camera.switchLens": message = .cameraSwitchLens(try payload(from: data, type: header.type))
+        case "camera.list": message = .cameraList
+        case "camera.zoom": message = .cameraZoom(try payload(from: data, type: header.type))
+        case "camera.cameras": message = .cameraCameras(try payload(from: data, type: header.type))
         case "camera.stop": message = .cameraStop
         case "auth.challenge": message = .authChallenge(try payload(from: data, type: header.type))
         case "auth.response": message = .authResponse(try payload(from: data, type: header.type))
