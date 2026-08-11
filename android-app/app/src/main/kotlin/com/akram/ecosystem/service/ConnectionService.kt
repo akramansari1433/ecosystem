@@ -611,6 +611,11 @@ class ConnectionService : Service() {
         com.akram.ecosystem.features.ClipboardHandler(this)
     }
 
+    /** Marks text as already-seen so our own clipboard writes are not echoed. */
+    fun suppressClipboard(text: String) {
+        clipboardHandler.markSent(text)
+    }
+
     /** Sends [text] to the Mac. Returns false when disconnected or a repeat. */
     fun sendLocalClipboard(text: String): Boolean {
         if (session == null) {

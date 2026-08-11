@@ -2,6 +2,8 @@ package com.akram.ecosystem.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.os.Bundle
@@ -28,11 +30,13 @@ object RemoteInput {
     val isAvailable: Boolean get() = service != null
 
     fun tap(x: Float, y: Float, longPress: Boolean) {
+        resetTypingContext()
         val path = Path().apply { moveTo(x, y) }
         dispatch(path, if (longPress) 600L else 40L)
     }
 
     fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long) {
+        resetTypingContext()
         val path = Path().apply {
             moveTo(x1, y1)
             lineTo(x2, y2)
@@ -112,6 +116,7 @@ object RemoteInput {
                 return true
             }
         }
+        resetTypingContext()
         val action = when (key) {
             "back" -> AccessibilityService.GLOBAL_ACTION_BACK
             "home" -> AccessibilityService.GLOBAL_ACTION_HOME
@@ -125,10 +130,91 @@ object RemoteInput {
         return true
     }
 
-    /** Types [text] into whatever text field currently has focus on the phone. */
+    /**
+     * Text we know is really in the focused field, or null when unknown.
+     *
+     * Reading the field is not trustworthy: an empty field often reports its
+     * placeholder as its text, and plenty of apps expose no hint metadata at all
+     * to tell the two apart. So the first keystroke goes in by paste — which
+     * needs no knowledge of the content and lands at the caret — and the result
+     * tells us what the field really holds. After that we track it ourselves.
+     */
+    @Volatile
+    private var knownText: String? = null
+
+    /** Anything that can move focus invalidates what we think the field holds. */
+    fun resetTypingContext() {
+        knownText = null
+    }
+
     fun typeText(text: String) {
         val service = service ?: return
-        handler.post { editFocusedText(service) { it + text } }
+        handler.post {
+            val node = service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+            if (node == null) {
+                Log.w(TAG, "no focused text field")
+                return@post
+            }
+            val known = knownText
+            if (known.isNullOrEmpty()) {
+                pasteAtCaret(service, node, text)
+            } else {
+                // Non-empty means no placeholder is showing, so the field's own
+                // text is authoritative again (the user may have edited on the
+                // phone between keystrokes).
+                val current = node.text?.toString()?.takeIf { it.isNotEmpty() } ?: known
+                setFocusedText(node, current + text)
+            }
+        }
+    }
+
+    /** Inserts via the clipboard, then learns the field's real content. */
+    private fun pasteAtCaret(
+        service: AccessibilityService,
+        node: AccessibilityNodeInfo,
+        text: String,
+    ) {
+        val clipboard = service.getSystemService(ClipboardManager::class.java)
+        val saved = clipboard.primaryClip
+        com.akram.ecosystem.service.ConnectionService.instance?.suppressClipboard(text)
+        clipboard.setPrimaryClip(ClipData.newPlainText("Ecosystem", text))
+        val pasted = node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        if (!pasted) {
+            Log.w(TAG, "paste rejected; falling back to set-text")
+            setFocusedText(node, text)
+        }
+        handler.postDelayed({
+            knownText = service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                ?.text?.toString() ?: text
+            saved?.let { clip ->
+                clip.getItemAt(0)?.coerceToText(service)?.toString()?.let {
+                    com.akram.ecosystem.service.ConnectionService.instance
+                        ?.suppressClipboard(it)
+                }
+                runCatching { clipboard.setPrimaryClip(clip) }
+            }
+        }, 150)
+    }
+
+    private fun setFocusedText(node: AccessibilityNodeInfo, updated: String) {
+        val args = Bundle().apply {
+            putCharSequence(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, updated)
+        }
+        if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+            knownText = updated.ifEmpty { null }
+            node.performAction(
+                AccessibilityNodeInfo.ACTION_SET_SELECTION,
+                Bundle().apply {
+                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT,
+                        updated.length)
+                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT,
+                        updated.length)
+                })
+        } else {
+            knownText = null
+            Log.w(TAG, "ACTION_SET_TEXT rejected by the focused field")
+        }
     }
 
     private fun editFocusedText(
@@ -140,17 +226,23 @@ object RemoteInput {
             Log.w(TAG, "no focused text field")
             return
         }
-        // An empty field reports its placeholder as text, so typing would append
-        // to the hint ("Search Google or type URL" + "hello").
+        val known = knownText
         val raw = node.text?.toString() ?: ""
-        val hint = node.hintText?.toString()
-        val current = if (node.isShowingHintText || (hint != null && raw == hint)) "" else raw
+        // Only trust the field's text when we know it holds something: a
+        // placeholder is only ever shown while the field is empty.
+        val current = when {
+            !known.isNullOrEmpty() -> raw.ifEmpty { known }
+            node.isShowingHintText -> ""
+            node.hintText?.toString() == raw -> ""
+            else -> raw
+        }
         val updated = transform(current)
         val args = Bundle().apply {
             putCharSequence(
                 AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, updated)
         }
         val ok = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        knownText = if (ok) updated.ifEmpty { null } else null
         if (ok) {
             // Keep the caret at the end so the next keystroke appends.
             node.performAction(
