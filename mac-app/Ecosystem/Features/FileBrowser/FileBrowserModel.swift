@@ -40,6 +40,23 @@ enum SortField: String, CaseIterable, Identifiable {
     case date = "Date modified"
     case size = "Size"
     var id: String { rawValue }
+
+    /// Direction wording that matches the field, the way Finder phrases it.
+    var ascendingLabel: String {
+        switch self {
+        case .name: "A to Z"
+        case .date: "Oldest first"
+        case .size: "Smallest first"
+        }
+    }
+
+    var descendingLabel: String {
+        switch self {
+        case .name: "Z to A"
+        case .date: "Newest first"
+        case .size: "Largest first"
+        }
+    }
 }
 
 /// Shortcuts to the folders that actually matter on an Android phone.

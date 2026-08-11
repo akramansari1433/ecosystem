@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -153,8 +154,8 @@ class ConnectionService : Service() {
     private suspend fun serverLoop() {
         while (true) {
             try {
-                // One server for the process lifetime; the trust manager reads the
-                // current pin per handshake, so pairing never changes the port.
+                // One server for the process lifetime: pairing must never change
+                // the port, or the Mac keeps dialling a stale mDNS record.
                 val server = TlsServer(identity).listen()
                 serverSocket = server
                 advertiser.register(server.localPort, deviceId, deviceName(), PROTOCOL_VERSION)
@@ -334,6 +335,9 @@ class ConnectionService : Service() {
             is Message.InputKey -> when (m.payload.key) {
                 "dim.on" -> com.akram.ecosystem.accessibility.RemoteInput.setDimmed(true)
                 "dim.off" -> com.akram.ecosystem.accessibility.RemoteInput.setDimmed(false)
+                "volume.up" -> adjustVolume(AudioManager.ADJUST_RAISE)
+                "volume.down" -> adjustVolume(AudioManager.ADJUST_LOWER)
+                "volume.mute" -> adjustVolume(AudioManager.ADJUST_TOGGLE_MUTE)
                 else ->
                     com.akram.ecosystem.accessibility.RemoteInput.globalAction(m.payload.key)
             }
@@ -661,6 +665,12 @@ class ConnectionService : Service() {
                 .setOngoing(true)
                 .addAction(Notification.Action.Builder(null, "Stop", stop).build())
                 .build())
+    }
+
+    /** Media volume, with the phone's own volume panel shown as feedback. */
+    private fun adjustVolume(direction: Int) {
+        getSystemService(AudioManager::class.java).adjustStreamVolume(
+            AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI)
     }
 
     /** Current screen size in pixels; input arrives normalized to it. */

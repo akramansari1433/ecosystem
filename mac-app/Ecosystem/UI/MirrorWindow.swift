@@ -136,6 +136,9 @@ private final class MirrorInputView: NSView {
 
 private struct MirrorSurface: NSViewRepresentable {
     let session: MirrorSession
+    /// Aspect of the whole content area (video + control bar), so the video
+    /// itself is never letterboxed.
+    let windowAspect: CGSize
 
     func makeNSView(context: Context) -> NSView {
         let view = MirrorInputView(videoLayer: session.displayLayer)
@@ -151,7 +154,7 @@ private struct MirrorSurface: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? MirrorInputView)?.applyAspectRatio(session.videoSize)
+        (nsView as? MirrorInputView)?.applyAspectRatio(windowAspect)
     }
 }
 
@@ -167,15 +170,7 @@ struct MirrorWindow: View {
             .onDisappear { session.stop() }
             .toolbar {
                 if session.phase == .streaming {
-                    ToolbarItemGroup {
-                        Button("Back", systemImage: "chevron.backward") {
-                            session.pressKey("back")
-                        }
-                        .help("Back (esc)")
-                        Button("Home", systemImage: "circle") { session.pressKey("home") }
-                        Button("Recents", systemImage: "square.on.square") {
-                            session.pressKey("recents")
-                        }
+                    ToolbarItem {
                         Button(
                             "Dim phone",
                             systemImage: session.phoneDimmed
@@ -212,20 +207,29 @@ struct MirrorWindow: View {
                     .multilineTextAlignment(.center)
             }
         case .streaming:
-            // No aspectRatio modifier: the window itself is locked to the phone's
-            // ratio, so the video fills every pixel of the content area.
-            MirrorSurface(session: session)
-                .overlay(alignment: .top) {
-                    if !appState.inputAvailable {
-                        Text("Control is off — enable “Ecosystem” in the phone's "
-                             + "Accessibility settings")
-                            .font(.callout)
-                            .padding(8)
-                            .frame(maxWidth: .infinity)
-                            .background(.orange.opacity(0.92))
-                            .foregroundStyle(.black)
-                    }
+            // The window is locked to video + bar, so the video itself fills its
+            // area exactly — no letterbox on any edge, at any window size.
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    MirrorSurface(session: session, windowAspect: windowAspect)
+                        .frame(height: geo.size.height * (1 - Self.barFraction))
+                        .overlay(alignment: .top) {
+                            if !appState.inputAvailable {
+                                Text("Control is off — enable “Ecosystem” in the "
+                                     + "phone's Accessibility settings")
+                                    .font(.callout)
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity)
+                                    .background(.orange.opacity(0.92))
+                                    .foregroundStyle(.black)
+                            }
+                        }
+                    controlBar
+                        .frame(height: geo.size.height * Self.barFraction)
+                        .frame(maxWidth: .infinity)
+                        .background(.bar)
                 }
+            }
         case .failed(let reason):
             ContentUnavailableView(
                 "Mirroring failed", systemImage: "exclamationmark.triangle",
@@ -233,4 +237,62 @@ struct MirrorWindow: View {
         }
     }
 
+    /// Share of the window height given to the control bar. A fixed fraction (not
+    /// a fixed height) keeps the locked window aspect exact while resizing.
+    private static let barFraction: CGFloat = 0.085
+
+    private var windowAspect: CGSize {
+        CGSize(width: session.videoSize.width,
+               height: session.videoSize.height / (1 - Self.barFraction))
+    }
+
+    private var controlBar: some View {
+        HStack(spacing: 0) {
+            Group {
+                BarButton(icon: "chevron.backward", label: "Back (esc)") {
+                    session.pressKey("back")
+                }
+                BarButton(icon: "circle", label: "Home") { session.pressKey("home") }
+                BarButton(icon: "square.on.square", label: "Recent apps") {
+                    session.pressKey("recents")
+                }
+                Divider().frame(height: 16).padding(.horizontal, 4)
+                BarButton(icon: "speaker.wave.2", label: "Volume up") {
+                    session.pressKey("volume.up")
+                }
+                BarButton(icon: "speaker.wave.1", label: "Volume down") {
+                    session.pressKey("volume.down")
+                }
+                BarButton(icon: "speaker.slash", label: "Mute") {
+                    session.pressKey("volume.mute")
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 10)
+    }
+}
+
+/// Flat, evenly spaced bar control — closer to Android's own navigation bar
+/// than a row of bordered Mac buttons.
+private struct BarButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .background(hovering ? Color.primary.opacity(0.1) : .clear,
+                            in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .help(label)
+        .onHover { hovering = $0 }
+    }
 }

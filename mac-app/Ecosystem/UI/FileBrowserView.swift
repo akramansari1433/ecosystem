@@ -127,18 +127,6 @@ struct FileBrowserView: View {
             .pickerStyle(.segmented)
         }
         ToolbarItem {
-            Menu {
-                Picker("Sort by", selection: $model.sortField) {
-                    ForEach(SortField.allCases) { Text($0.rawValue).tag($0) }
-                }
-                Divider()
-                Toggle("Ascending", isOn: $model.sortAscending)
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-            }
-            .help("Sort files")
-        }
-        ToolbarItem {
             Button("Send files", systemImage: "square.and.arrow.up") { pickAndUpload() }
                 .help("Copy files from this Mac into the folder you're viewing")
         }
@@ -306,25 +294,58 @@ struct FileBrowserView: View {
     // MARK: chrome
 
     private var breadcrumbs: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                Button("Phone") { model.navigate(toComponent: nil) }
-                    .buttonStyle(.plain)
-                    .fontWeight(model.pathComponents.isEmpty ? .semibold : .regular)
-                ForEach(Array(model.pathComponents.enumerated()), id: \.offset) { index, name in
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Button(name) { model.navigate(toComponent: index) }
+        HStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    Button("Phone") { model.navigate(toComponent: nil) }
                         .buttonStyle(.plain)
-                        .fontWeight(index == model.pathComponents.count - 1
-                                    ? .semibold : .regular)
+                        .fontWeight(model.pathComponents.isEmpty ? .semibold : .regular)
+                    ForEach(
+                        Array(model.pathComponents.enumerated()), id: \.offset
+                    ) { index, name in
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Button(name) { model.navigate(toComponent: index) }
+                            .buttonStyle(.plain)
+                            .fontWeight(index == model.pathComponents.count - 1
+                                        ? .semibold : .regular)
+                    }
                 }
-                Spacer()
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            Spacer(minLength: 0)
+            sortMenu
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+    }
+
+    /// Shows the active sort in the label, so the current order is readable
+    /// without opening the menu.
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort by", selection: $model.sortField) {
+                ForEach(SortField.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.inline)
+            Picker("Order", selection: $model.sortAscending) {
+                Label(model.sortField.ascendingLabel, systemImage: "arrow.up").tag(true)
+                Label(model.sortField.descendingLabel, systemImage: "arrow.down").tag(false)
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: model.sortAscending ? "arrow.up" : "arrow.down")
+                    .font(.caption.weight(.semibold))
+                Text(model.sortField.rawValue)
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Sort order")
     }
 
     private var statusBar: some View {
