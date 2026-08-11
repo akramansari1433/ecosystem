@@ -70,9 +70,21 @@ struct MenuContent: View {
     }
 
     private func dismissMenuBarPanel() {
-        // MenuBarExtra's window-style panel has no public dismiss API; sending
-        // the standard cancel action closes it the same way pressing esc does.
-        NSApp.sendAction(#selector(NSResponder.cancelOperation(_:)), to: nil, from: nil)
+        // Close the panel's window directly. Sending `cancelOperation:` with no
+        // target also dismissed it, but AppKit rings the system bell whenever an
+        // action reaches the end of the responder chain unhandled — that was the
+        // beep on every menu click.
+        let panels = NSApp.windows.filter { window in
+            window.isVisible && (window.className.contains("MenuBarExtra")
+                                 || window.className.contains("StatusBar"))
+        }
+        if panels.isEmpty {
+            // Nothing matched (a future macOS may rename the class): dropping
+            // activation dismisses the panel too, and is still silent.
+            NSApp.deactivate()
+        } else {
+            panels.forEach { $0.orderOut(nil) }
+        }
     }
 
     // MARK: header
