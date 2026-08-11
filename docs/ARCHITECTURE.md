@@ -94,11 +94,15 @@ flowchart LR
     end
 
     MENU --> CM
-    CM --> FILES & MIRROR & CLIP1
+    CM --> FILES
+    CM --> MIRROR
+    CM --> CLIP1
     CM <-->|"TLS: control connection<br/>JSON messages"| SVC
     FILES <-->|"TLS: stream connections<br/>file bytes"| SVC
     MIRROR <-->|"TLS: stream connection<br/>H.264 frames"| SVC
-    SVC --> FS & ENC & A11Y
+    SVC --> FS
+    SVC --> ENC
+    SVC --> A11Y
     NSD -.->|"announces on LAN"| CM
 ```
 
@@ -121,22 +125,22 @@ sequenceDiagram
     participant M as Mac
     participant P as Phone
     Note over P: advertises _ecosys._tcp on the LAN
-    M->>P: TLS connect (Mac pins the phone's certificate)
-    M->>P: hello {name, version, capabilities}
-    P->>M: hello {name, version, capabilities}
+    M->>P: TLS connect, pinning the phone's certificate
+    M->>P: hello with name, version and capabilities
+    P->>M: hello with name, version and capabilities
     alt not paired yet
-        M->>P: pair.request {nonce}
+        M->>P: pair.request carrying a random nonce
         P->>M: pair.accept
-        Note over M,P: both derive the same 6-digit code<br/>from the nonce + phone certificate
+        Note over M,P: both derive the same 6-digit code<br/>from the nonce and the phone's certificate
         M->>P: pair.confirm
         P->>M: pair.confirm
-        Note over M,P: both derive the shared secret, store it, reconnect
+        Note over M,P: both derive the shared secret,<br/>store it, then reconnect
     else already paired
-        P->>M: auth.challenge {random nonce}
-        M->>P: auth.response {HMAC-SHA256(secret, nonce)}
+        P->>M: auth.challenge carrying a random nonce
+        M->>P: auth.response, an HMAC of that nonce
         P->>M: auth.ok
     end
-    Note over M,P: features unlocked; ping every 10s keeps it alive
+    Note over M,P: features unlocked, ping every 10s keeps it alive
 ```
 
 Until `auth.ok`, the phone refuses every message except the handshake itself.
