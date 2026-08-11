@@ -22,6 +22,7 @@ targets:
       path: Ecosystem/Info.plist
       properties:
         CFBundleDisplayName: Ecosystem
+        CFBundleIconFile: AppIcon
         LSUIElement: true
         NSLocalNetworkUsageDescription: >-
           Ecosystem discovers and connects to your Android phone on the local network.

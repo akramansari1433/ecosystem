@@ -15,6 +15,7 @@
 		0DC24AC80033BFEC2452280D /* DeviceBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149B418FD7D5021324F0B77A /* DeviceBrowser.swift */; };
 		11A0D8EDBE5CB893349D39BF /* H264Assembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01C9702A34C121B7AA70421 /* H264Assembler.swift */; };
 		2292B4EDC9F6D39058FF944C /* StreamConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */; };
+		3A9DF5EC35CFCE329BB6835E /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = A760FAAD24D7764BF66763BD /* AppIcon.icns */; };
 		3ABC86EB39404ACC14CCB4BB /* ClipboardSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BB3230DAE77ACE2C1F815C /* ClipboardSync.swift */; };
 		472EEEB6FD9298D0887404CA /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003CE1F6634354A0762DDD21 /* AppState.swift */; };
 		598657EB28FC92DBB8022B4C /* MirrorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C5509329948F276C59FB9F /* MirrorSession.swift */; };
@@ -43,6 +44,7 @@
 		9DAE884B9D12090ED543EE6D /* FileBrowserModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserModel.swift; sourceTree = "<group>"; };
 		A01C9702A34C121B7AA70421 /* H264Assembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H264Assembler.swift; sourceTree = "<group>"; };
 		A60F7109FE591E7B23DDC88D /* ControlConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlConnection.swift; sourceTree = "<group>"; };
+		A760FAAD24D7764BF66763BD /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		A76DA50DBCAA9E450A57EB60 /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
 		AC65AADAEA421ABDBB56F40D /* ConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionManager.swift; sourceTree = "<group>"; };
 		B4BB3230DAE77ACE2C1F815C /* ClipboardSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSync.swift; sourceTree = "<group>"; };
@@ -112,6 +114,7 @@
 		5EB82D4FF0E390780D7120FA /* Ecosystem */ = {
 			isa = PBXGroup;
 			children = (
+				A760FAAD24D7764BF66763BD /* AppIcon.icns */,
 				4F97B7789670B31B8A473C61 /* EcosystemApp.swift */,
 				F090A46118396020E3CD41FD /* Info.plist */,
 				E6DD3E4DBB250845D747F474 /* Core */,
@@ -147,6 +150,7 @@
 			buildConfigurationList = BF3F23238EC5DCBAEB8C6403 /* Build configuration list for PBXNativeTarget "Ecosystem" */;
 			buildPhases = (
 				6EF6DCC1D87D2A7BE444D77D /* Sources */,
+				EFFC0B677DBD5D9DCF906FA8 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -191,6 +195,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		EFFC0B677DBD5D9DCF906FA8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A9DF5EC35CFCE329BB6835E /* AppIcon.icns in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		6EF6DCC1D87D2A7BE444D77D /* Sources */ = {
