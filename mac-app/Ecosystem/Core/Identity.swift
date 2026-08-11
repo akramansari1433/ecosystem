@@ -48,6 +48,20 @@ struct PairingStore {
     /// Both devices derive the same secret from the phone's certificate and the
     /// nonce the Mac sent in `pair.request` — no extra round trip, and the
     /// verification code the user compared covers both inputs.
+    /// A pairing offer this Mac is currently displaying as a QR code. The phone
+    /// scans it and derives the shared secret immediately; this Mac derives the
+    /// same secret once it sees the phone's certificate during the TLS handshake.
+    /// Kept in memory only, and short-lived: a pairing offer should not outlive
+    /// the window showing it.
+    struct ScanOffer {
+        let nonce: Data
+        let created: Date
+
+        var isFresh: Bool { Date().timeIntervalSince(created) < 300 }
+    }
+
+    nonisolated(unsafe) static var scanOffer: ScanOffer?
+
     /// Forgets this Mac's pairing, so it can pair with the phone afresh.
     static func clear() {
         try? FileManager.default.removeItem(at: peerCertURL)

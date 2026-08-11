@@ -252,6 +252,21 @@ final class ConnectionManager {
             }
 
         case .authChallenge(let challenge):
+            // Pairing by QR: the phone already has the secret, derived from the
+            // nonce this Mac put in the code. Derive the same one and answer.
+            if PairingStore.sharedSecret == nil,
+               let offer = PairingStore.scanOffer, offer.isFresh,
+               let peerDER = currentPeerDER,
+               let nonce = Data(hex: challenge.nonce) {
+                let secret = PairingStore.deriveSecret(
+                    nonce: offer.nonce, peerCertificate: peerDER)
+                try? PairingStore.save(peerCertificate: peerDER, secret: secret)
+                appState.paired = true
+                try? await conn.send(.authResponse(.init(
+                    mac: PairingStore.authResponse(nonce: nonce, secret: secret))),
+                    replyTo: envelope.id)
+                return
+            }
             guard let secret = PairingStore.sharedSecret,
                   let nonce = Data(hex: challenge.nonce) else {
                 // No secret on this Mac: it has never paired with this phone.
@@ -266,6 +281,7 @@ final class ConnectionManager {
                 replyTo: envelope.id)
 
         case .authOK:
+            PairingStore.scanOffer = nil
             isReadyForRequests = true
             appState.connected = true
             if let name = appState.phoneName { appState.status = .connected(name) }
@@ -305,6 +321,31 @@ final class ConnectionManager {
     }
 
     // MARK: pairing
+
+    /// Builds the payload for the QR code the phone scans. Generating a new offer
+    /// invalidates the previous one.
+    func makeScanOffer() -> String {
+        var nonce = Data(count: 32)
+        _ = nonce.withUnsafeMutableBytes {
+            SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!)
+        }
+        PairingStore.scanOffer = .init(nonce: nonce, created: Date())
+        let name = (Host.current().localizedName ?? "Mac")
+            .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "Mac"
+        return "ecosystem://pair?d=\(Self.deviceId)&n=\(nonce.hexString)&name=\(name)"
+    }
+
+    /// Forgets this phone on this Mac. The phone keeps its own record until it is
+    /// removed there too, but this Mac will have to pair again to reconnect.
+    func forgetPhone() {
+        PairingStore.clear()
+        PairingStore.scanOffer = nil
+        appState.paired = false
+        appState.connected = false
+        appState.status = .searching
+        isReadyForRequests = false
+        Task { await connection?.close() }
+    }
 
     func startPairing() {
         guard let currentPeerDER, let connection else { return }

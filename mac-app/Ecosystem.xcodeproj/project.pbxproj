@@ -27,6 +27,7 @@
 		C48194E7AB7A02E82FD29388 /* PairingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEFCBBACFFCC5E8341B2614 /* PairingEngine.swift */; };
 		D519C5C2FAC068D519D69598 /* CameraWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CA2A9A89AA5503D8C6828B /* CameraWindow.swift */; };
 		D7F9384856882A254138465A /* CameraSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03E9476F42A9905DCD349E31 /* CameraSession.swift */; };
+		D81E17440607E11E365D9049 /* PairByScanWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 684502EFA95A06C656943815 /* PairByScanWindow.swift */; };
 		E2D2780193FF0DD8FF8573A5 /* PairingCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94CD0BD69396AC6E5A07D21F /* PairingCode.swift */; };
 		E343F3D4B7D06BF2A83473B7 /* BinaryFrames.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04E1941B706ADDDE5DC146E /* BinaryFrames.swift */; };
 		F22EB9E21BB925A6858F3B7B /* MenuContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264E91AA7C2D9DDB60797974 /* MenuContent.swift */; };
@@ -44,6 +45,7 @@
 		4F97B7789670B31B8A473C61 /* EcosystemApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EcosystemApp.swift; sourceTree = "<group>"; };
 		5C90C4DDE6E434D78F959671 /* Identity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identity.swift; sourceTree = "<group>"; };
 		6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorWindow.swift; sourceTree = "<group>"; };
+		684502EFA95A06C656943815 /* PairByScanWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairByScanWindow.swift; sourceTree = "<group>"; };
 		94CD0BD69396AC6E5A07D21F /* PairingCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCode.swift; sourceTree = "<group>"; };
 		9DAE884B9D12090ED543EE6D /* FileBrowserModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserModel.swift; sourceTree = "<group>"; };
 		A01C9702A34C121B7AA70421 /* H264Assembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H264Assembler.swift; sourceTree = "<group>"; };
@@ -97,6 +99,7 @@
 				CB3A4DA73670F8B5D2839D0B /* FileBrowserView.swift */,
 				264E91AA7C2D9DDB60797974 /* MenuContent.swift */,
 				6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */,
+				684502EFA95A06C656943815 /* PairByScanWindow.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -244,6 +247,7 @@
 				01CEE3F51B1892D9FF6270CC /* Messages.swift in Sources */,
 				598657EB28FC92DBB8022B4C /* MirrorSession.swift in Sources */,
 				A25373137800201449090B82 /* MirrorWindow.swift in Sources */,
+				D81E17440607E11E365D9049 /* PairByScanWindow.swift in Sources */,
 				E2D2780193FF0DD8FF8573A5 /* PairingCode.swift in Sources */,
 				C48194E7AB7A02E82FD29388 /* PairingEngine.swift in Sources */,
 				006083E3279B7BA8A48EE736 /* ProtocolCodec.swift in Sources */,

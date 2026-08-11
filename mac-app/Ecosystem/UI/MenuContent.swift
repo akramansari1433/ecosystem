@@ -15,8 +15,13 @@ struct MenuContent: View {
                     .padding(.horizontal, 14)
                     .padding(.bottom, 12)
             } else if case .foundUnpaired = appState.status {
-                MenuRow(icon: "link", title: "Pair with this phone…") {
-                    manager.startPairing()
+                VStack(spacing: 2) {
+                    MenuRow(icon: "qrcode", title: "Pair by scanning…") {
+                        open(window: "pair-scan")
+                    }
+                    MenuRow(icon: "number", title: "Pair with a 6-digit code…") {
+                        manager.startPairing()
+                    }
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
@@ -46,6 +51,14 @@ struct MenuContent: View {
             .padding(8)
 
             Divider()
+
+            if appState.paired {
+                MenuRow(icon: "minus.circle", title: "Forget this phone…") {
+                    manager.forgetPhone()
+                }
+                .padding(8)
+                Divider()
+            }
 
             MenuRow(icon: "power", title: "Quit Ecosystem") {
                 NSApplication.shared.terminate(nil)

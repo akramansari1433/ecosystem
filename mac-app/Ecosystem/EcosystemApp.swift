@@ -36,6 +36,13 @@ struct EcosystemApp: App {
         }
         .defaultSize(width: 640, height: 440)
 
+        Window("Pair with your phone", id: "pair-scan") {
+            PairByScanWindow(manager: manager)
+                .environment(appState)
+        }
+        .defaultSize(width: 360, height: 440)
+        .windowResizability(.contentSize)
+
         Window("Phone Camera", id: "phone-camera") {
             CameraWindow(session: manager.camera)
                 .environment(appState)

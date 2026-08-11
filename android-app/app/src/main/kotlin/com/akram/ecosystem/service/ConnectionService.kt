@@ -67,6 +67,8 @@ class ConnectionService : Service() {
         val peerName: String? = null,
         /** Names of every Mac connected right now. */
         val connectedPeers: List<String> = emptyList(),
+        /** Every Mac this phone is paired with, connected or not. */
+        val pairedMacs: List<PairedPeers.Peer> = emptyList(),
         val pairing: PairingUi? = null,
         val mirrorConsentPending: Boolean = false,
         val cameraPermissionNeeded: Boolean = false,
@@ -131,7 +133,9 @@ class ConnectionService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         multicastLock = getSystemService(WifiManager::class.java)
             .createMulticastLock("ecosystem-nsd").apply { acquire() }
-        _state.value = UiState(paired = !PairedPeers.isEmpty(filesDir))
+        _state.value = UiState(
+            paired = !PairedPeers.isEmpty(filesDir),
+            pairedMacs = PairedPeers.all(filesDir))
         scope.launch { serverLoop() }
         watchNetwork()
     }
@@ -296,7 +300,8 @@ class ConnectionService : Service() {
         _state.value = _state.value.copy(
             connected = connected.isNotEmpty(),
             peerName = names.firstOrNull(),
-            connectedPeers = names)
+            connectedPeers = names,
+            pairedMacs = PairedPeers.all(filesDir))
         updateNotification(when (names.size) {
             0 -> "Waiting for your Mac…"
             1 -> "Connected to ${names.first()}"
@@ -605,6 +610,46 @@ class ConnectionService : Service() {
     }
 
     // MARK: pairing
+
+    /**
+     * Pairs straight from a QR code shown on the Mac. The code carries the Mac's
+     * device id and a random nonce; both sides then derive the same secret from
+     * that nonce and this phone's certificate — the Mac reads the certificate from
+     * the TLS handshake. Scanning proves the two devices are in the same room, so
+     * there is nothing for the user to compare.
+     *
+     * Returns the Mac's name on success.
+     */
+    @OptIn(ExperimentalStdlibApi::class)
+    fun pairFromScan(payload: String): String? {
+        val uri = runCatching { android.net.Uri.parse(payload) }.getOrNull() ?: return null
+        if (uri.scheme != "ecosystem" || uri.host != "pair") return null
+        val peerId = uri.getQueryParameter("d")?.takeIf { it.isNotEmpty() } ?: return null
+        val nonce = uri.getQueryParameter("n")
+            ?.let { runCatching { it.hexToByteArray() }.getOrNull() } ?: return null
+        if (nonce.size < 16) return null
+        val name = uri.getQueryParameter("name")?.takeIf { it.isNotEmpty() } ?: "Mac"
+
+        PairedPeers.add(
+            filesDir, peerId, name, PairingSecret.derive(nonce, identity.certDer))
+        _state.value = _state.value.copy(paired = true, pairing = null)
+        // If that Mac is already connected but unauthenticated, drop the session so
+        // it reconnects and completes the handshake with its new secret.
+        sessions.remove(peerId)?.close()
+        Log.i(TAG, "paired with $name by QR")
+        return name
+    }
+
+    /** Forgets one Mac: it loses access immediately and must pair again. */
+    fun unpair(deviceId: String) {
+        PairedPeers.remove(filesDir, deviceId)
+        sessions.remove(deviceId)?.close()
+        _state.value = _state.value.copy(
+            paired = !PairedPeers.isEmpty(filesDir),
+            pairedMacs = PairedPeers.all(filesDir))
+        publishConnectionState()
+        Log.i(TAG, "unpaired $deviceId")
+    }
 
     fun userAccepted() = handlePairingInput(PairingEngine.Input.UserAccepted)
     fun userConfirmed() = handlePairingInput(PairingEngine.Input.UserConfirmed)

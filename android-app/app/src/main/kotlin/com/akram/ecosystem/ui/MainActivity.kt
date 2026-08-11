@@ -184,6 +184,12 @@ fun StatusScreen(
                 CameraPermissionCard(onAllowCamera)
             }
 
+            if (state.pairedMacs.isNotEmpty()) {
+                PairedMacsCard(state.pairedMacs, state.connectedPeers)
+            }
+
+            PairByScanCard()
+
             ClipboardSetupCard()
             StorageSetupCard()
 
@@ -193,6 +199,79 @@ fun StatusScreen(
                     is ConnectionService.PairingUi.Code -> CodeDialog(pairing)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PairedMacsCard(
+    macs: List<com.akram.ecosystem.core.PairedPeers.Peer>,
+    connected: List<String>,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Paired Macs", fontWeight = FontWeight.SemiBold)
+            macs.forEach { mac ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(mac.name, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            if (mac.name in connected) "Connected" else "Not connected",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    TextButton(onClick = {
+                        ConnectionService.instance?.unpair(mac.deviceId)
+                    }) { Text("Remove") }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Pairing by scanning the QR code the Mac shows. Uses Google's on-device code
+ * scanner, so there is no camera permission to grant and no scanner UI to build.
+ */
+@Composable
+private fun PairByScanCard() {
+    val context = LocalContext.current
+    var result by remember { mutableStateOf<String?>(null) }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Add a Mac", fontWeight = FontWeight.SemiBold)
+            Text(
+                result ?: "On the Mac, click the Ecosystem icon and choose “Pair by "
+                    + "scanning”. Then scan the code it shows.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Button(onClick = {
+                val options = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+                    .Builder()
+                    .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
+                    .enableAutoZoom()
+                    .build()
+                com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+                    .getClient(context, options)
+                    .startScan()
+                    .addOnSuccessListener { barcode ->
+                        val value = barcode.rawValue
+                        val name = value?.let {
+                            ConnectionService.instance?.pairFromScan(it)
+                        }
+                        result = if (name != null) {
+                            "Paired with $name. It will connect in a moment."
+                        } else {
+                            "That code was not an Ecosystem pairing code."
+                        }
+                    }
+                    .addOnFailureListener { result = "Scanning failed: ${it.message}" }
+                    .addOnCanceledListener { result = null }
+            }) { Text("Scan QR code from Mac") }
         }
     }
 }
