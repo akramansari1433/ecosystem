@@ -112,7 +112,7 @@ object RemoteInput {
                 return true
             }
             "backspace" -> {
-                handler.post { editFocusedText(service) { it.dropLast(1) } }
+                handler.post { deleteLastCharacter(service) }
                 return true
             }
         }
@@ -217,45 +217,50 @@ object RemoteInput {
         }
     }
 
-    private fun editFocusedText(
-        service: AccessibilityService,
-        transform: (String) -> String,
-    ) {
+    private fun deleteLastCharacter(service: AccessibilityService) {
         val node = service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
         if (node == null) {
             Log.w(TAG, "no focused text field")
             return
         }
         val known = knownText
-        val raw = node.text?.toString() ?: ""
-        // Only trust the field's text when we know it holds something: a
-        // placeholder is only ever shown while the field is empty.
-        val current = when {
-            !known.isNullOrEmpty() -> raw.ifEmpty { known }
-            node.isShowingHintText -> ""
-            node.hintText?.toString() == raw -> ""
-            else -> raw
-        }
-        val updated = transform(current)
-        val args = Bundle().apply {
-            putCharSequence(
-                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, updated)
-        }
-        val ok = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-        knownText = if (ok) updated.ifEmpty { null } else null
-        if (ok) {
-            // Keep the caret at the end so the next keystroke appends.
-            node.performAction(
-                AccessibilityNodeInfo.ACTION_SET_SELECTION,
-                Bundle().apply {
-                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT,
-                        updated.length)
-                    putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT,
-                        updated.length)
-                })
+        val current = if (!known.isNullOrEmpty()) {
+            node.text?.toString()?.takeIf { it.isNotEmpty() } ?: known
         } else {
-            Log.w(TAG, "ACTION_SET_TEXT rejected by the focused field")
+            realText(node)
         }
+        if (current.isEmpty()) {
+            // Nothing there — deleting from a placeholder would type it in.
+            knownText = null
+            return
+        }
+        setFocusedText(node, current.dropLast(1))
+    }
+
+    /**
+     * The field's genuine content, or "" when it is empty and merely showing a
+     * placeholder. Where hint metadata is missing, selecting the reported text
+     * settles it: a selection can only span characters that are really there,
+     * so it fails on an empty field.
+     */
+    private fun realText(node: AccessibilityNodeInfo): String {
+        val raw = node.text?.toString() ?: ""
+        if (raw.isEmpty() || node.isShowingHintText) return ""
+        if (node.hintText?.toString() == raw) return ""
+        val selectable = node.performAction(
+            AccessibilityNodeInfo.ACTION_SET_SELECTION,
+            Bundle().apply {
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, raw.length)
+            })
+        if (!selectable) return ""
+        node.performAction(
+            AccessibilityNodeInfo.ACTION_SET_SELECTION,
+            Bundle().apply {
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, raw.length)
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, raw.length)
+            })
+        return raw
     }
 
     private fun imeEnter(service: AccessibilityService) {
