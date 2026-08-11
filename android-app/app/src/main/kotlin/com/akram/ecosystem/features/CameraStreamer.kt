@@ -57,19 +57,25 @@ class CameraStreamer(
         val cameraId = cameraId(lens) ?: error("no $lens camera")
         val size = chooseSize(cameraId)
         height = size.second
+        // Must be set before the drain thread starts: it loops on this flag, and
+        // if it sees false it exits and releases the surface the camera is about
+        // to configure — which surfaced as "Error configuring streams: Broken pipe".
+        running = true
         startEncoder(size.first, size.second)
         openCamera(cameraId)
-        running = true
-        Log.i(TAG, "camera $lens streaming ${size.first}x${size.second} @${fps}fps")
+        Log.i(TAG, "camera $lens starting ${size.first}x${size.second} @${fps}fps")
     }
 
     fun stop() {
+        if (!running && device == null) return
         running = false
         runCatching { session?.close() }
         runCatching { device?.close() }
         session = null
         device = null
-        // The drain loop releases the codec and surface as it exits.
+        // The drain loop releases the codec and surface as it exits, then this
+        // shuts the camera thread down so no stale callback can be posted to it.
+        handler.postDelayed({ thread.quitSafely() }, 300)
     }
 
     fun cachedConfig(): ByteArray? = configFrame
@@ -106,6 +112,13 @@ class CameraStreamer(
         return best.width to best.height
     }
 
+    /**
+     * Camera2 needs a surface that already exists and is fully configured when the
+     * capture session is built. A surface from `createInputSurface()` is tied to
+     * the codec's own lifecycle and Samsung rejects the session with
+     * "Error configuring streams: Broken pipe". A *persistent* input surface is
+     * the supported way to wire a camera into an encoder.
+     */
     private fun startEncoder(w: Int, h: Int) {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT,
@@ -118,10 +131,12 @@ class CameraStreamer(
             setInteger(MediaFormat.KEY_PRIORITY, 0)
             setInteger(MediaFormat.KEY_LATENCY, 0)
         }
+        val surface = MediaCodec.createPersistentInputSurface()
         val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        codec.setInputSurface(surface)
         this.codec = codec
-        inputSurface = codec.createInputSurface()
+        inputSurface = surface
         codec.start()
         thread(name = "camera-drain") { drainLoop(codec) }
     }
@@ -138,6 +153,7 @@ class CameraStreamer(
                     executor,
                     object : CameraCaptureSession.StateCallback() {
                         override fun onConfigured(configured: CameraCaptureSession) {
+                            Log.i(TAG, "capture session configured")
                             session = configured
                             val request = camera
                                 .createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
@@ -220,7 +236,7 @@ class CameraStreamer(
             runCatching { codec.stop() }
             runCatching { codec.release() }
             runCatching { inputSurface?.release() }
-            thread.quitSafely()
+            inputSurface = null
             Log.i(TAG, "camera stopped")
         }
     }
