@@ -80,7 +80,12 @@ object RemoteInput {
             Log.w(TAG, "no focused text field")
             return
         }
-        val updated = transform(node.text?.toString() ?: "")
+        // An empty field reports its placeholder as text, so typing would append
+        // to the hint ("Search Google or type URL" + "hello").
+        val raw = node.text?.toString() ?: ""
+        val hint = node.hintText?.toString()
+        val current = if (node.isShowingHintText || (hint != null && raw == hint)) "" else raw
+        val updated = transform(current)
         val args = Bundle().apply {
             putCharSequence(
                 AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, updated)
