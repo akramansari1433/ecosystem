@@ -29,6 +29,7 @@ import com.akram.ecosystem.core.HelloPayload
 import com.akram.ecosystem.core.Identity
 import com.akram.ecosystem.core.InboundEnvelope
 import com.akram.ecosystem.core.Message
+import com.akram.ecosystem.core.PairedPeers
 import com.akram.ecosystem.core.PairingEngine
 import com.akram.ecosystem.core.PairingSecret
 import com.akram.ecosystem.core.ProtocolCodec
@@ -64,6 +65,8 @@ class ConnectionService : Service() {
         val paired: Boolean = false,
         val connected: Boolean = false,
         val peerName: String? = null,
+        /** Names of every Mac connected right now. */
+        val connectedPeers: List<String> = emptyList(),
         val pairing: PairingUi? = null,
         val mirrorConsentPending: Boolean = false,
         val cameraPermissionNeeded: Boolean = false,
@@ -107,13 +110,11 @@ class ConnectionService : Service() {
     private lateinit var advertiser: NsdAdvertiser
     private var multicastLock: WifiManager.MulticastLock? = null
     private var serverSocket: SSLServerSocket? = null
-    private var session: Session? = null
+    /** One entry per connected Mac, keyed by its device id. */
+    private val sessions = java.util.concurrent.ConcurrentHashMap<String, Session>()
     private var pairingEngine: PairingEngine? = null
     private var pendingPairNonce: ByteArray? = null
-    @Volatile
-    private var authenticated = false
-    private var authChallenge: ByteArray? = null
-    private val writeMutex = Mutex()
+    private var pairingSession: Session? = null
     private lateinit var deviceId: String
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -130,7 +131,7 @@ class ConnectionService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         multicastLock = getSystemService(WifiManager::class.java)
             .createMulticastLock("ecosystem-nsd").apply { acquire() }
-        _state.value = UiState(paired = PairingSecret.load(filesDir) != null)
+        _state.value = UiState(paired = !PairedPeers.isEmpty(filesDir))
         scope.launch { serverLoop() }
         watchNetwork()
     }
@@ -232,63 +233,89 @@ class ConnectionService : Service() {
         hello: Message.Hello,
         pending: ArrayDeque<InboundEnvelope>,
     ) {
-        // The newest control connection wins: drop any previous (stale) session.
-        session?.close()
-        val s = Session(socket)
-        session = s
-        authenticated = false
-        authChallenge = null
+        val peerId = hello.payload.deviceId
+        // Only replace a session from the *same* Mac (a reconnect). Another Mac's
+        // session stays up: both can be paired and connected at once.
+        sessions.remove(peerId)?.close()
+        val s = Session(socket, peerId, hello.payload.name)
+        sessions[peerId] = s
         try {
             if (hello.payload.protocolVersion != PROTOCOL_VERSION) {
-                sendMessage(Message.Error(ErrorPayload("version_mismatch")))
+                s.send(Message.Error(ErrorPayload("version_mismatch")))
                 return
             }
-            sendMessage(Message.Hello(HelloPayload(
+            s.send(Message.Hello(HelloPayload(
                 capabilities = capabilities, deviceId = deviceId,
                 name = deviceName(), protocolVersion = PROTOCOL_VERSION)))
-            _state.value = _state.value.copy(connected = true, peerName = hello.payload.name)
-            updateNotification("Connected to ${hello.payload.name}")
 
-            val secret = PairingSecret.load(filesDir)
-            if (secret != null) {
-                // Paired: prove the peer holds the shared secret before serving.
+            val recognised = PairedPeers.secretFor(filesDir, peerId) != null ||
+                PairedPeers.legacySecret(filesDir) != null
+            if (recognised) {
+                // Known Macs prove they hold their own secret before being served.
                 val nonce = PairingSecret.newNonce()
-                authChallenge = nonce
+                s.authChallenge = nonce
                 @OptIn(ExperimentalStdlibApi::class)
-                sendMessage(Message.AuthChallenge(
+                s.send(Message.AuthChallenge(
                     com.akram.ecosystem.core.AuthChallengePayload(nonce.toHexString())))
+            } else {
+                // A Mac we do not know must prove nothing — it earns access only
+                // by pairing, which the user approves on this phone. Granting it
+                // a session here would let any Mac on the network walk in.
+                s.send(Message.Error(ErrorPayload(
+                    "pair_required", "This Mac is not paired with the phone yet")))
             }
-            pending.forEach { dispatch(it) }
+            pending.forEach { dispatch(it, s) }
             val input = socket.inputStream
             while (true) {
                 val n = input.read(buf)
                 if (n < 0) break
                 for (frame in reader.append(buf.copyOf(n))) {
-                    dispatch(ProtocolCodec.decodeFrame(frame))
+                    dispatch(ProtocolCodec.decodeFrame(frame), s)
                 }
             }
         } catch (t: Throwable) {
             Log.w(TAG, "control connection ended: $t")
         } finally {
             runCatching { socket.close() }
-            // Only clear state if WE are still the active session — a newer
-            // connection may already have replaced this one.
-            if (session === s) {
-                session = null
-                pairingEngine = null
-                _state.value = _state.value.copy(
-                    connected = false, peerName = null, pairing = null)
-                updateNotification("Waiting for your Mac…")
+            if (sessions[peerId] === s) {
+                sessions.remove(peerId)
+                if (pairingSession === s) {
+                    pairingSession = null
+                    pairingEngine = null
+                    _state.value = _state.value.copy(pairing = null)
+                }
+                publishConnectionState()
             }
         }
     }
 
-    private fun dispatch(envelope: InboundEnvelope) {
+    /** Reflects however many Macs are connected in the UI and the notification. */
+    private fun publishConnectionState() {
+        val connected = sessions.values.filter { it.authenticated }
+        val names = connected.map { it.name }
+        _state.value = _state.value.copy(
+            connected = connected.isNotEmpty(),
+            peerName = names.firstOrNull(),
+            connectedPeers = names)
+        updateNotification(when (names.size) {
+            0 -> "Waiting for your Mac…"
+            1 -> "Connected to ${names.first()}"
+            else -> "Connected to ${names.size} Macs"
+        })
+    }
+
+    /** Sends to every authenticated Mac: clipboard changes, ring notifications. */
+    private fun broadcast(message: Message) {
+        sessions.values.filter { it.authenticated }.forEach { it.send(message) }
+    }
+
+    private fun dispatch(envelope: InboundEnvelope, session: Session) {
         val message = envelope.message
         // Everything except the handshake requires an authenticated peer.
-        if (PairingSecret.load(filesDir) != null && !authenticated) {
+        if (!session.authenticated) {
             when (message) {
-                is Message.AuthResponse, Message.Ping -> Unit
+                is Message.AuthResponse, Message.Ping, is Message.PairRequest,
+                Message.PairConfirm, is Message.PairAbort -> Unit
                 else -> {
                     Log.w(TAG, "dropping ${message.typeString} before auth")
                     return
@@ -296,43 +323,34 @@ class ConnectionService : Service() {
             }
         }
         when (val m = message) {
-            is Message.AuthResponse -> {
-                val nonce = authChallenge
-                val secret = PairingSecret.load(filesDir)
-                val expected = if (nonce != null && secret != null)
-                    PairingSecret.response(nonce, secret) else null
-                if (expected != null && PairingSecret.constantTimeEquals(expected, m.payload.mac)) {
-                    authenticated = true
-                    authChallenge = null
-                    sendMessage(Message.AuthOK)
-                    Log.i(TAG, "peer authenticated")
-                } else {
-                    Log.w(TAG, "auth failed; closing")
-                    sendMessage(Message.Error(
-                        com.akram.ecosystem.core.ErrorPayload("auth_failed")))
-                    session?.close()
-                }
+            is Message.AuthResponse -> authenticate(session, m.payload.mac)
+            Message.Ping -> session.send(Message.Pong, replyTo = envelope.id)
+            is Message.PairRequest -> handlePairingInput(
+                PairingEngine.Input.ReceivedRequest(m.payload.certFingerprint), session)
+            Message.PairConfirm ->
+                handlePairingInput(PairingEngine.Input.ReceivedConfirm, session)
+            is Message.PairAbort -> handlePairingInput(
+                PairingEngine.Input.ReceivedAbort(m.payload.reason), session)
+            is Message.ClipboardSet -> {
+                clipboardHandler.applyRemote(m.payload)
+                // Keep the other Macs in step with what was just copied.
+                sessions.values
+                    .filter { it.authenticated && it !== session }
+                    .forEach { it.send(m) }
             }
-            Message.Ping -> sendMessage(Message.Pong, replyTo = envelope.id)
-            is Message.PairRequest ->
-                handlePairingInput(PairingEngine.Input.ReceivedRequest(m.payload.certFingerprint))
-            Message.PairConfirm -> handlePairingInput(PairingEngine.Input.ReceivedConfirm)
-            is Message.PairAbort ->
-                handlePairingInput(PairingEngine.Input.ReceivedAbort(m.payload.reason))
-            is Message.ClipboardSet -> clipboardHandler.applyRemote(m.payload)
             Message.RingStart -> startRinging()
             Message.RingStop -> stopRinging(notifyMac = false)
-            is Message.FsList -> handleFsList(envelope.id, m.payload.path)
-            is Message.FsSearch -> handleFsSearch(envelope.id, m.payload)
-            is Message.FsThumb -> handleFsThumb(envelope.id, m.payload)
-            is Message.FsDownload -> handleFsDownload(envelope.id, m.payload.path)
-            is Message.FsUpload -> handleFsUpload(envelope.id, m.payload)
+            is Message.FsList -> handleFsList(session, envelope.id, m.payload.path)
+            is Message.FsSearch -> handleFsSearch(session, envelope.id, m.payload)
+            is Message.FsThumb -> handleFsThumb(session, envelope.id, m.payload)
+            is Message.FsDownload -> handleFsDownload(session, envelope.id, m.payload.path)
+            is Message.FsUpload -> handleFsUpload(session, envelope.id, m.payload)
             is Message.FsTransferResult ->
                 Log.i(TAG, "transfer ${m.payload.token}: ok=${m.payload.ok}")
-            is Message.MirrorStart -> handleMirrorStart(envelope.id, m.payload)
+            is Message.MirrorStart -> handleMirrorStart(session, envelope.id, m.payload)
             Message.MirrorStop -> pauseMirroring()
-            is Message.CameraStart -> handleCameraStart(envelope.id, m.payload)
-            Message.CameraList -> sendMessage(
+            is Message.CameraStart -> handleCameraStart(session, envelope.id, m.payload)
+            Message.CameraList -> session.send(
                 Message.CameraCameras(com.akram.ecosystem.core.CameraListPayload(
                     com.akram.ecosystem.features.CameraCatalog.list(this))),
                 replyTo = envelope.id)
@@ -379,7 +397,7 @@ class ConnectionService : Service() {
 
     private fun storageGranted() = android.os.Environment.isExternalStorageManager()
 
-    private fun handleFsList(requestId: String, path: String) {
+    private fun handleFsList(session: Session, requestId: String, path: String) {
         if (!storageGranted()) {
             sendMessage(Message.Error(ErrorPayload("storage_permission",
                 "Grant 'All files access' in the Ecosystem app")), replyTo = requestId)
@@ -390,7 +408,7 @@ class ConnectionService : Service() {
         scope.launch {
             runCatching { fileService.list(path) }
                 .onSuccess {
-                    sendMessage(Message.FsEntries(FsEntriesPayload(it)), replyTo = requestId)
+                    session.send(Message.FsEntries(FsEntriesPayload(it)), replyTo = requestId)
                 }
                 .onFailure {
                     sendMessage(Message.Error(ErrorPayload("fs_error", it.message)),
@@ -404,6 +422,7 @@ class ConnectionService : Service() {
         setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "dng")
 
     private fun handleFsSearch(
+        session: Session,
         requestId: String,
         payload: com.akram.ecosystem.core.FsSearchPayload,
     ) {
@@ -420,7 +439,7 @@ class ConnectionService : Service() {
             runCatching { fileService.search(payload.path, extensions, payload.maxDepth) }
                 .onSuccess {
                     Log.i(TAG, "search ${payload.path} ${payload.kinds} -> ${it.size} files")
-                    sendMessage(Message.FsEntries(FsEntriesPayload(it)), replyTo = requestId)
+                    session.send(Message.FsEntries(FsEntriesPayload(it)), replyTo = requestId)
                 }
                 .onFailure {
                     sendMessage(Message.Error(ErrorPayload("fs_error", it.message)),
@@ -434,7 +453,7 @@ class ConnectionService : Service() {
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private val thumbDispatcher = Dispatchers.IO.limitedParallelism(2)
 
-    private fun handleFsThumb(requestId: String, payload: com.akram.ecosystem.core.FsThumbPayload) {
+    private fun handleFsThumb(session: Session, requestId: String, payload: com.akram.ecosystem.core.FsThumbPayload) {
         scope.launch(thumbDispatcher) {
             val size = android.util.Size(payload.maxEdge, payload.maxEdge)
             val bitmap = runCatching {
@@ -456,7 +475,7 @@ class ConnectionService : Service() {
         }
     }
 
-    private fun handleFsDownload(requestId: String, path: String) {
+    private fun handleFsDownload(session: Session, requestId: String, path: String) {
         runCatching { fileService.prepareDownload(path) }
             .onSuccess {
                 sendMessage(Message.FsTransferReady(
@@ -469,7 +488,7 @@ class ConnectionService : Service() {
             }
     }
 
-    private fun handleFsUpload(requestId: String, payload: FsUploadPayload) {
+    private fun handleFsUpload(session: Session, requestId: String, payload: FsUploadPayload) {
         runCatching { fileService.prepareUpload(payload.destPath, payload.size) }
             .onSuccess {
                 sendMessage(Message.FsTransferReady(FsTransferReadyPayload(token = it)),
@@ -591,7 +610,7 @@ class ConnectionService : Service() {
     fun userConfirmed() = handlePairingInput(PairingEngine.Input.UserConfirmed)
     fun userRejected() = handlePairingInput(PairingEngine.Input.UserRejected)
 
-    private fun handlePairingInput(input: PairingEngine.Input) {
+    private fun handlePairingInput(input: PairingEngine.Input, session: Session? = null) {
         // The Mac's nonce arrives as the pair.request "fingerprint"; rebuild the
         // engine with it so both sides derive the same verification code.
         if (input is PairingEngine.Input.ReceivedRequest) {
@@ -602,6 +621,7 @@ class ConnectionService : Service() {
                 return
             }
             pendingPairNonce = nonce
+            pairingSession = session
             pairingEngine = PairingEngine(
                 PairingEngine.Role.RESPONDER, ownDer = identity.certDer, peerDer = nonce)
         }
@@ -609,20 +629,25 @@ class ConnectionService : Service() {
         val session = session ?: return
         for (effect in engine.handle(input)) {
             when (effect) {
-                is PairingEngine.Effect.Send -> sendMessage(effect.message)
+                is PairingEngine.Effect.Send -> session.send(effect.message)
                 is PairingEngine.Effect.ShowAcceptPrompt ->
                     _state.value = _state.value.copy(
-                        pairing = PairingUi.AcceptPrompt(effect.fingerprint))
+                        pairing = PairingUi.AcceptPrompt(session.name))
                 is PairingEngine.Effect.DisplayCode ->
                     _state.value = _state.value.copy(pairing = PairingUi.Code(effect.code))
                 PairingEngine.Effect.PersistPeerCert ->
-                    pendingPairNonce?.let {
-                        PairingSecret.save(
-                            filesDir, PairingSecret.derive(it, identity.certDer))
+                    pendingPairNonce?.let { nonce ->
+                        // Stored against this Mac's device id, so pairing a second
+                        // Mac leaves the first one paired.
+                        PairedPeers.add(
+                            filesDir, session.peerId, session.name,
+                            PairingSecret.derive(nonce, identity.certDer))
                     }
                 PairingEngine.Effect.Complete -> {
                     _state.value = _state.value.copy(paired = true, pairing = null)
                     pendingPairNonce = null
+                    pairingSession = null
+                    pairingEngine = null
                     // Reconnect authenticated: drop the connection; the Mac re-dials.
                     session.close()
                 }
@@ -645,10 +670,10 @@ class ConnectionService : Service() {
         clipboardHandler.markSent(text)
     }
 
-    /** Sends [text] to the Mac. Returns false when disconnected or a repeat. */
+    /** Sends [text] to every connected Mac. False when none, or it is a repeat. */
     fun sendLocalClipboard(text: String): Boolean {
-        if (session == null) {
-            Log.i(TAG, "clipboard: no session; not sending")
+        if (sessions.values.none { it.authenticated }) {
+            Log.i(TAG, "clipboard: nothing connected; not sending")
             return false
         }
         if (!clipboardHandler.shouldSend(text)) {
@@ -756,6 +781,7 @@ class ConnectionService : Service() {
     }
 
     private fun handleMirrorStart(
+        session: Session,
         requestId: String,
         payload: com.akram.ecosystem.core.MirrorStartPayload,
     ) {
@@ -774,7 +800,7 @@ class ConnectionService : Service() {
                             .putExtra("requestProjection", true))
                 }
             }
-            sendMessage(Message.MirrorNeedsConsent, replyTo = requestId)
+            session.send(Message.MirrorNeedsConsent, replyTo = requestId)
             return
         }
         consentPromptShown = false
@@ -936,15 +962,17 @@ class ConnectionService : Service() {
     }
 
     /** The Mac asked for the camera while the app was hidden; retry once visible. */
-    private var pendingCameraRequest: Pair<String, com.akram.ecosystem.core.CameraStartPayload>? = null
+    private var pendingCameraRequest: Triple<Session, String,
+        com.akram.ecosystem.core.CameraStartPayload>? = null
 
     fun onAppForeground() {
         val pending = pendingCameraRequest ?: return
         pendingCameraRequest = null
-        handleCameraStart(pending.first, pending.second)
+        handleCameraStart(pending.first, pending.second, pending.third)
     }
 
     private fun handleCameraStart(
+        session: Session,
         requestId: String,
         payload: com.akram.ecosystem.core.CameraStartPayload,
     ) {
@@ -960,13 +988,13 @@ class ConnectionService : Service() {
         // session dies with "Broken pipe". The app has to be on screen, and the
         // service has to carry the camera foreground type.
         if (!MainActivity.isVisible) {
-            pendingCameraRequest = requestId to payload
+            pendingCameraRequest = Triple(session, requestId, payload)
             bringAppToFront()
             scope.launch {
                 kotlinx.coroutines.delay(4000)
-                if (pendingCameraRequest?.first == requestId) {
+                if (pendingCameraRequest?.second == requestId) {
                     pendingCameraRequest = null
-                    sendMessage(Message.Error(ErrorPayload(
+                    session.send(Message.Error(ErrorPayload(
                         "camera_foreground", "Open Ecosystem on the phone to start the camera")),
                         replyTo = requestId)
                 }
@@ -1131,25 +1159,84 @@ class ConnectionService : Service() {
 
     // MARK: outbound
 
+    /** Broadcasts to every connected Mac (clipboard, ring, stream frames). */
     fun sendMessage(message: Message, replyTo: String? = null) {
-        val s = session ?: return
-        scope.launch {
-            writeMutex.withLock {
-                runCatching {
-                    s.socket.outputStream.write(
-                        ProtocolCodec.encodeFrame(
-                            id = UUID.randomUUID().toString(), message = message,
-                            replyTo = replyTo))
-                    s.socket.outputStream.flush()
-                }.onFailure { Log.w(TAG, "send failed: $it") }
-            }
-        }
+        sessions.values.filter { it.authenticated }.forEach { it.send(message, replyTo) }
     }
 
     // MARK: plumbing
 
-    private class Session(val socket: SSLSocket) {
+    private inner class Session(
+        val socket: SSLSocket,
+        val peerId: String,
+        val name: String,
+    ) {
+        @Volatile
+        var authenticated = false
+        var authChallenge: ByteArray? = null
+        private val writeMutex = Mutex()
+
+        fun send(message: Message, replyTo: String? = null) {
+            scope.launch {
+                writeMutex.withLock {
+                    runCatching {
+                        socket.outputStream.write(ProtocolCodec.encodeFrame(
+                            id = UUID.randomUUID().toString(),
+                            message = message, replyTo = replyTo))
+                        socket.outputStream.flush()
+                    }.onFailure { Log.w(TAG, "send to $name failed: $it") }
+                }
+            }
+        }
+
         fun close() = runCatching { socket.close() }
+    }
+
+    /**
+     * Verifies a Mac against its own stored secret. A Mac paired before multiple
+     * Macs were supported has no entry yet, so the single legacy secret is tried
+     * once and then recorded under its device id — nobody re-pairs after updating.
+     */
+    private fun authenticate(session: Session, mac: String) {
+        val nonce = session.authChallenge
+        if (nonce == null) {
+            session.close()
+            return
+        }
+        val candidates = buildList<Pair<ByteArray, Boolean>> {
+            PairedPeers.secretFor(filesDir, session.peerId)?.let { add(it to false) }
+            PairedPeers.legacySecret(filesDir)?.let { add(it to true) }
+        }
+        val match = candidates.firstOrNull { (secret, _) ->
+            PairingSecret.constantTimeEquals(
+                PairingSecret.response(nonce, secret), mac)
+        }
+        if (match == null) {
+            if (PairedPeers.secretFor(filesDir, session.peerId) == null) {
+                // A Mac we have never paired with: invite it to pair rather than
+                // dropping it, so a second Mac can be added.
+                Log.i(TAG, "${session.name} is unknown; offering to pair")
+                session.authChallenge = null
+                session.send(Message.Error(ErrorPayload(
+                    "pair_required", "This Mac is not paired with the phone yet")))
+                return
+            }
+            Log.w(TAG, "auth failed for ${session.name}; closing")
+            session.send(Message.Error(ErrorPayload("auth_failed")))
+            session.close()
+            return
+        }
+        if (match.second) {
+            PairedPeers.add(filesDir, session.peerId, session.name, match.first)
+            PairedPeers.retireLegacySecret(filesDir)
+            Log.i(TAG, "migrated ${session.name} to per-Mac pairing")
+        }
+        session.authenticated = true
+        session.authChallenge = null
+        session.send(Message.AuthOK)
+        _state.value = _state.value.copy(paired = true)
+        publishConnectionState()
+        Log.i(TAG, "${session.name} authenticated")
     }
 
     private fun watchNetwork() {

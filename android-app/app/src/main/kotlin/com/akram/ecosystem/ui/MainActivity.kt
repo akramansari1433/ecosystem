@@ -149,6 +149,8 @@ fun StatusScreen(
                 Column(Modifier.padding(16.dp)) {
                     Text(
                         when {
+                            state.connectedPeers.size > 1 ->
+                                "Connected to ${state.connectedPeers.joinToString(" and ")}"
                             state.connected -> "Connected to ${state.peerName}"
                             state.paired -> "Paired — waiting for your Mac"
                             else -> "Not paired — open Ecosystem on your Mac"
@@ -293,10 +295,7 @@ private fun AcceptDialog(prompt: ConnectionService.PairingUi.AcceptPrompt) {
     AlertDialog(
         onDismissRequest = { ConnectionService.instance?.userRejected() },
         title = { Text("Pair with a Mac?") },
-        text = {
-            Text("A Mac wants to pair with this phone.\n\nCertificate: " +
-                prompt.fingerprint.take(16) + "…")
-        },
+        text = { Text("“${prompt.fingerprint}” wants to pair with this phone.") },
         confirmButton = {
             Button(onClick = { ConnectionService.instance?.userAccepted() }) { Text("Accept") }
         },

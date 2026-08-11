@@ -254,7 +254,11 @@ final class ConnectionManager {
         case .authChallenge(let challenge):
             guard let secret = PairingStore.sharedSecret,
                   let nonce = Data(hex: challenge.nonce) else {
-                appState.status = .error("Pairing data missing — pair again")
+                // No secret on this Mac: it has never paired with this phone.
+                PairingStore.clear()
+                appState.paired = false
+                isReadyForRequests = true
+                appState.status = .foundUnpaired(appState.phoneName ?? "phone")
                 return
             }
             try? await conn.send(.authResponse(.init(
@@ -279,6 +283,12 @@ final class ConnectionManager {
         case .pairAbort(let payload):
             await runPairingEffects(
                 pairingEngine?.handle(.receivedAbort(reason: payload.reason)) ?? [], conn: conn)
+
+        case .error(let payload) where payload.code == "pair_required":
+            PairingStore.clear()
+            appState.paired = false
+            isReadyForRequests = true
+            appState.status = .foundUnpaired(appState.phoneName ?? "phone")
 
         case .clipboardSet(let payload):
             clipboard.applyRemote(payload)

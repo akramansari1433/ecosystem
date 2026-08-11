@@ -48,6 +48,12 @@ struct PairingStore {
     /// Both devices derive the same secret from the phone's certificate and the
     /// nonce the Mac sent in `pair.request` — no extra round trip, and the
     /// verification code the user compared covers both inputs.
+    /// Forgets this Mac's pairing, so it can pair with the phone afresh.
+    static func clear() {
+        try? FileManager.default.removeItem(at: peerCertURL)
+        try? FileManager.default.removeItem(at: secretURL)
+    }
+
     static func deriveSecret(nonce: Data, peerCertificate: Data) -> SymmetricKey {
         HKDF<SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: nonce),
