@@ -56,6 +56,12 @@ final class ConnectionManager {
 
     private var hasStarted = false
 
+    /// True once this connection has said hello and been authenticated. Sending
+    /// anything before that loses the message: the phone requires hello as the
+    /// first frame and closes the connection otherwise, and it drops feature
+    /// messages that arrive before authentication.
+    private var isReadyForRequests = false
+
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
@@ -160,6 +166,7 @@ final class ConnectionManager {
         case .ready(let peerDER):
             currentPeerDER = peerDER
             reconnectAttempt = 0
+            isReadyForRequests = false
             try? await conn.send(.hello(HelloPayload(
                 capabilities: ["clipboard", "ring", "fs", "mirror", "input"],
                 deviceId: Self.deviceId,
@@ -171,6 +178,7 @@ final class ConnectionManager {
 
         case .closed:
             log.info("connection closed; scheduling reconnect")
+            isReadyForRequests = false
             for (_, continuation) in pendingReplies {
                 continuation.resume(throwing: RequestError.notConnected)
             }
@@ -184,8 +192,19 @@ final class ConnectionManager {
         }
     }
 
+    /// Waits for the handshake to finish, so nothing jumps the queue ahead of
+    /// hello and gets the connection closed.
+    private func awaitReady(timeout: Double = 8) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !isReadyForRequests {
+            guard Date() < deadline else { throw RequestError.notConnected }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
     /// Sends a request and awaits the correlated reply.
     func request(_ message: Message, timeout: Double = 15) async throws -> InboundEnvelope {
+        try await awaitReady()
         guard let connection else { throw RequestError.notConnected }
         let id = UUID().uuidString.lowercased()
         let reply: InboundEnvelope = try await withCheckedThrowingContinuation { cont in
@@ -227,6 +246,8 @@ final class ConnectionManager {
             if PairingStore.isPaired {
                 appState.status = .connected(hello.name)   // confirmed once auth.ok lands
             } else {
+                // Unpaired: no auth step, so pairing messages may flow now.
+                isReadyForRequests = true
                 appState.status = .foundUnpaired(hello.name)
             }
 
@@ -241,6 +262,7 @@ final class ConnectionManager {
                 replyTo: envelope.id)
 
         case .authOK:
+            isReadyForRequests = true
             appState.connected = true
             if let name = appState.phoneName { appState.status = .connected(name) }
             log.info("authenticated")
@@ -346,8 +368,11 @@ final class ConnectionManager {
     }
 
     func send(_ message: Message) {
-        guard let connection else { return }
-        Task { try? await connection.send(message) }
+        Task {
+            try? await awaitReady(timeout: 4)
+            guard let connection else { return }
+            try? await connection.send(message)
+        }
     }
 
     private func scheduleReconnect() {

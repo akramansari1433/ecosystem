@@ -209,7 +209,17 @@ class ConnectionService : Service() {
             is Message.Hello -> runControl(socket, reader, buf, first, pending)
             is Message.StreamAttach -> runStream(socket, reader, first.payload)
             else -> {
-                Log.w(TAG, "unexpected first frame ${first.typeString}")
+                // Closing silently made a mis-ordered client look like a dropped
+                // connection; say what happened so the far end can report it.
+                Log.w(TAG, "unexpected first frame ${first.typeString}; expected hello")
+                runCatching {
+                    socket.outputStream.write(ProtocolCodec.encodeFrame(
+                        id = UUID.randomUUID().toString(),
+                        message = Message.Error(ErrorPayload(
+                            "expected_hello",
+                            "First frame must be hello, got ${first.typeString}"))))
+                    socket.outputStream.flush()
+                }
                 runCatching { socket.close() }
             }
         }
