@@ -49,17 +49,25 @@ private final class MirrorInputView: NSView {
         }
     }
 
-    /// Locks the window to the phone's aspect ratio so the video fills it
-    /// completely — no letterbox bars on any edge.
-    func applyAspectRatio(_ size: CGSize) {
-        guard let window, size.width > 0, size.height > 0 else { return }
-        let ratio = NSSize(width: size.width, height: size.height)
+    /// Sizes the window so the video area matches the phone's aspect exactly,
+    /// leaving room for the title bar and the control bar underneath. Getting
+    /// this wrong used to hide the top of the screen behind the title bar.
+    func applyAspectRatio(_ videoSize: CGSize, barHeight: CGFloat) {
+        guard let window, let contentView = window.contentView,
+              videoSize.width > 0, videoSize.height > 0 else { return }
+        let titleBar = max(0, contentView.frame.height - window.contentLayoutRect.height)
+        let width = contentView.frame.width
+        guard width > 0 else { return }
+        let contentHeight =
+            (width * videoSize.height / videoSize.width) + barHeight + titleBar
+        let ratio = NSSize(width: width, height: contentHeight)
         guard window.contentAspectRatio != ratio else { return }
         window.contentAspectRatio = ratio
+
         var frame = window.frame
-        let chrome = frame.height - window.contentLayoutRect.height
-        let contentWidth = window.contentLayoutRect.width
-        let targetHeight = contentWidth * size.height / size.width + chrome
+        let windowChrome = frame.height - contentView.frame.height
+        let targetHeight = contentHeight + windowChrome
+        guard abs(targetHeight - frame.height) > 1 else { return }
         frame.origin.y += frame.height - targetHeight
         frame.size.height = targetHeight
         window.setFrame(frame, display: true, animate: false)
@@ -136,9 +144,7 @@ private final class MirrorInputView: NSView {
 
 private struct MirrorSurface: NSViewRepresentable {
     let session: MirrorSession
-    /// Aspect of the whole content area (video + control bar), so the video
-    /// itself is never letterboxed.
-    let windowAspect: CGSize
+    let barHeight: CGFloat
 
     func makeNSView(context: Context) -> NSView {
         let view = MirrorInputView(videoLayer: session.displayLayer)
@@ -154,7 +160,8 @@ private struct MirrorSurface: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? MirrorInputView)?.applyAspectRatio(windowAspect)
+        (nsView as? MirrorInputView)?
+            .applyAspectRatio(session.videoSize, barHeight: barHeight)
     }
 }
 
@@ -166,7 +173,6 @@ struct MirrorWindow: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.black)
-            .ignoresSafeArea()
             .onDisappear { session.stop() }
             .toolbar {
                 if session.phase == .streaming {
@@ -209,26 +215,25 @@ struct MirrorWindow: View {
         case .streaming:
             // The window is locked to video + bar, so the video itself fills its
             // area exactly — no letterbox on any edge, at any window size.
-            GeometryReader { geo in
-                VStack(spacing: 0) {
-                    MirrorSurface(session: session, windowAspect: windowAspect)
-                        .frame(height: geo.size.height * (1 - Self.barFraction))
-                        .overlay(alignment: .top) {
-                            if !appState.inputAvailable {
-                                Text("Control is off — enable “Ecosystem” in the "
-                                     + "phone's Accessibility settings")
-                                    .font(.callout)
-                                    .padding(8)
-                                    .frame(maxWidth: .infinity)
-                                    .background(.orange.opacity(0.92))
-                                    .foregroundStyle(.black)
-                            }
+            VStack(spacing: 0) {
+                MirrorSurface(session: session, barHeight: Self.barHeight)
+                    .aspectRatio(session.videoSize, contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .top) {
+                        if !appState.inputAvailable {
+                            Text("Control is off — enable “Ecosystem” in the "
+                                 + "phone's Accessibility settings")
+                                .font(.callout)
+                                .padding(8)
+                                .frame(maxWidth: .infinity)
+                                .background(.orange.opacity(0.92))
+                                .foregroundStyle(.black)
                         }
-                    controlBar
-                        .frame(height: geo.size.height * Self.barFraction)
-                        .frame(maxWidth: .infinity)
-                        .background(.bar)
-                }
+                    }
+                controlBar
+                    .frame(height: Self.barHeight)
+                    .frame(maxWidth: .infinity)
+                    .background(.bar)
             }
         case .failed(let reason):
             ContentUnavailableView(
@@ -237,14 +242,7 @@ struct MirrorWindow: View {
         }
     }
 
-    /// Share of the window height given to the control bar. A fixed fraction (not
-    /// a fixed height) keeps the locked window aspect exact while resizing.
-    private static let barFraction: CGFloat = 0.085
-
-    private var windowAspect: CGSize {
-        CGSize(width: session.videoSize.width,
-               height: session.videoSize.height / (1 - Self.barFraction))
-    }
+    private static let barHeight: CGFloat = 46
 
     private var controlBar: some View {
         HStack(spacing: 0) {
