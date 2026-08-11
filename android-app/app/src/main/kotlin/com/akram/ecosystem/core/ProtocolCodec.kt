@@ -57,6 +57,9 @@ object ProtocolCodec {
             is Message.InputKey -> json.encodeToJsonElement(message.payload)
             is Message.InputText -> json.encodeToJsonElement(message.payload)
             is Message.InputScroll -> json.encodeToJsonElement(message.payload)
+            is Message.CameraStart -> json.encodeToJsonElement(message.payload)
+            is Message.CameraStarted -> json.encodeToJsonElement(message.payload)
+            is Message.CameraSwitchLens -> json.encodeToJsonElement(message.payload)
             is Message.AuthChallenge -> json.encodeToJsonElement(message.payload)
             is Message.AuthResponse -> json.encodeToJsonElement(message.payload)
             else -> null
@@ -105,6 +108,10 @@ object ProtocolCodec {
             "input.key" -> Message.InputKey(payload(raw))
             "input.text" -> Message.InputText(payload(raw))
             "input.scroll" -> Message.InputScroll(payload(raw))
+            "camera.start" -> Message.CameraStart(payload(raw))
+            "camera.started" -> Message.CameraStarted(payload(raw))
+            "camera.switchLens" -> Message.CameraSwitchLens(payload(raw))
+            "camera.stop" -> Message.CameraStop
             "auth.challenge" -> Message.AuthChallenge(payload(raw))
             "auth.response" -> Message.AuthResponse(payload(raw))
             "auth.ok" -> Message.AuthOK

@@ -28,6 +28,7 @@ final class ConnectionManager {
     private var pendingReplies: [String: CheckedContinuation<InboundEnvelope, Error>] = [:]
     private(set) lazy var files = FileBrowserModel(manager: self)
     private(set) lazy var mirror = MirrorSession(manager: self)
+    private(set) lazy var camera = CameraSession(manager: self)
 
     enum RequestError: LocalizedError {
         case notConnected

@@ -91,6 +91,24 @@ struct MirrorStartedPayload: Codable, Equatable {
     let width: Int
 }
 
+struct CameraStartPayload: Codable, Equatable {
+    let bitrateBps: Int
+    let fps: Int
+    /// "back" or "front".
+    let lens: String
+    let width: Int
+}
+
+struct CameraStartedPayload: Codable, Equatable {
+    let height: Int
+    let token: String
+    let width: Int
+}
+
+struct CameraLensPayload: Codable, Equatable {
+    let lens: String
+}
+
 struct AuthChallengePayload: Codable, Equatable {
     let nonce: String
 }
@@ -168,6 +186,10 @@ enum Message: Equatable {
     case inputKey(InputKeyPayload)
     case inputText(InputTextPayload)
     case inputScroll(InputScrollPayload)
+    case cameraStart(CameraStartPayload)
+    case cameraStarted(CameraStartedPayload)
+    case cameraSwitchLens(CameraLensPayload)
+    case cameraStop
     case authChallenge(AuthChallengePayload)
     case authResponse(AuthResponsePayload)
     case authOK
@@ -207,6 +229,10 @@ enum Message: Equatable {
         case .inputKey: "input.key"
         case .inputText: "input.text"
         case .inputScroll: "input.scroll"
+        case .cameraStart: "camera.start"
+        case .cameraStarted: "camera.started"
+        case .cameraSwitchLens: "camera.switchLens"
+        case .cameraStop: "camera.stop"
         case .authChallenge: "auth.challenge"
         case .authResponse: "auth.response"
         case .authOK: "auth.ok"

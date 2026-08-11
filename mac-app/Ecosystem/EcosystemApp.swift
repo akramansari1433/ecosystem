@@ -32,6 +32,12 @@ struct EcosystemApp: App {
         }
         .defaultSize(width: 640, height: 440)
 
+        Window("Phone Camera", id: "phone-camera") {
+            CameraWindow(session: manager.camera)
+                .environment(appState)
+        }
+        .defaultSize(width: 720, height: 460)
+
         Window("Phone Screen", id: "phone-mirror") {
             MirrorWindow(session: manager.mirror)
                 .environment(appState)

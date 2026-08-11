@@ -115,6 +115,27 @@ data class MirrorStartedPayload(
 // Input coordinates are normalized 0..1 relative to the screen, so they're
 // independent of resolution and rotation. See docs/protocol.md §12.
 @Serializable
+data class CameraStartPayload(
+    val bitrateBps: Int,
+    val fps: Int,
+    /** "back" or "front". */
+    val lens: String,
+    val width: Int,
+)
+
+@Serializable
+data class CameraStartedPayload(
+    val height: Int,
+    val token: String,
+    val width: Int,
+)
+
+@Serializable
+data class CameraLensPayload(
+    val lens: String,
+)
+
+@Serializable
 data class AuthChallengePayload(
     val nonce: String,
 )
@@ -200,6 +221,10 @@ sealed interface Message {
     data class InputKey(val payload: InputKeyPayload) : Message
     data class InputText(val payload: InputTextPayload) : Message
     data class InputScroll(val payload: InputScrollPayload) : Message
+    data class CameraStart(val payload: CameraStartPayload) : Message
+    data class CameraStarted(val payload: CameraStartedPayload) : Message
+    data class CameraSwitchLens(val payload: CameraLensPayload) : Message
+    data object CameraStop : Message
     data class AuthChallenge(val payload: AuthChallengePayload) : Message
     data class AuthResponse(val payload: AuthResponsePayload) : Message
     data object AuthOK : Message
@@ -239,6 +264,10 @@ sealed interface Message {
             is InputKey -> "input.key"
             is InputText -> "input.text"
             is InputScroll -> "input.scroll"
+            is CameraStart -> "camera.start"
+            is CameraStarted -> "camera.started"
+            is CameraSwitchLens -> "camera.switchLens"
+            CameraStop -> "camera.stop"
             is AuthChallenge -> "auth.challenge"
             is AuthResponse -> "auth.response"
             AuthOK -> "auth.ok"

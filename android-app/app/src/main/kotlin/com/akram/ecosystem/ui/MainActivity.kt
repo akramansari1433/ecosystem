@@ -46,6 +46,9 @@ class MainActivity : ComponentActivity() {
     private val requestNotifications =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    private val requestCamera =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     private val requestProjection =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val service = ConnectionService.instance
@@ -67,11 +70,13 @@ class MainActivity : ComponentActivity() {
         maybeLaunchProjectionConsent(intent)
         setContent {
             MaterialTheme {
-                StatusScreen(onAllowMirroring = {
-                    val manager = getSystemService(
-                        android.media.projection.MediaProjectionManager::class.java)
-                    requestProjection.launch(manager.createScreenCaptureIntent())
-                })
+                StatusScreen(
+                    onAllowMirroring = {
+                        val manager = getSystemService(
+                            android.media.projection.MediaProjectionManager::class.java)
+                        requestProjection.launch(manager.createScreenCaptureIntent())
+                    },
+                    onAllowCamera = { requestCamera.launch(Manifest.permission.CAMERA) })
             }
         }
     }
@@ -106,7 +111,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun StatusScreen(onAllowMirroring: () -> Unit = {}) {
+fun StatusScreen(
+    onAllowMirroring: () -> Unit = {},
+    onAllowCamera: () -> Unit = {},
+) {
     val state by ConnectionService.state.collectAsState()
 
     Scaffold { innerPadding ->
@@ -139,6 +147,26 @@ fun StatusScreen(onAllowMirroring: () -> Unit = {}) {
                         Text("Your Mac wants to mirror this screen",
                             fontWeight = FontWeight.SemiBold)
                         Button(onClick = onAllowMirroring) { Text("Allow mirroring") }
+                    }
+                }
+            }
+
+            if (state.cameraActive) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Camera is streaming to your Mac",
+                            fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            if (state.cameraPermissionNeeded) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Your Mac wants to use this camera",
+                            fontWeight = FontWeight.SemiBold)
+                        Button(onClick = onAllowCamera) { Text("Allow camera") }
                     }
                 }
             }

@@ -1,0 +1,231 @@
+package com.akram.ecosystem.features
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.params.OutputConfiguration
+import android.hardware.camera2.params.SessionConfiguration
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaFormat
+import android.os.Handler
+import android.os.HandlerThread
+import android.util.Log
+import android.util.Range
+import android.view.Surface
+import com.akram.ecosystem.core.BinaryFrames
+import java.util.concurrent.Executor
+import kotlin.concurrent.thread
+
+/**
+ * Streams a phone camera to the Mac: Camera2 renders straight into a hardware
+ * H.264 encoder's input surface, so frames never travel through app memory.
+ * See docs/protocol.md §11.
+ */
+class CameraStreamer(
+    private val context: Context,
+    private val width: Int,
+    private val fps: Int,
+    private val bitrateBps: Int,
+    /** Called from the drain thread: (frameType, ptsMicros, payload). */
+    private val sink: (Int, Long, ByteArray) -> Unit,
+) {
+    private val cameraManager = context.getSystemService(CameraManager::class.java)
+    private val thread = HandlerThread("camera").apply { start() }
+    private val handler = Handler(thread.looper)
+    private val executor = Executor { handler.post(it) }
+
+    @Volatile
+    private var running = false
+    private var codec: MediaCodec? = null
+    private var inputSurface: Surface? = null
+    private var device: CameraDevice? = null
+    private var session: CameraCaptureSession? = null
+    private var configFrame: ByteArray? = null
+
+    var height: Int = 0
+        private set
+
+    val isRunning: Boolean get() = running
+
+    /** Resolution actually chosen, once [start] has returned. */
+    fun start(lens: String) {
+        val cameraId = cameraId(lens) ?: error("no $lens camera")
+        val size = chooseSize(cameraId)
+        height = size.second
+        startEncoder(size.first, size.second)
+        openCamera(cameraId)
+        running = true
+        Log.i(TAG, "camera $lens streaming ${size.first}x${size.second} @${fps}fps")
+    }
+
+    fun stop() {
+        running = false
+        runCatching { session?.close() }
+        runCatching { device?.close() }
+        session = null
+        device = null
+        // The drain loop releases the codec and surface as it exits.
+    }
+
+    fun cachedConfig(): ByteArray? = configFrame
+
+    fun requestKeyframe() {
+        runCatching {
+            codec?.setParameters(android.os.Bundle().apply {
+                putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+            })
+        }
+    }
+
+    private fun cameraId(lens: String): String? {
+        val wanted = if (lens == "front") {
+            CameraCharacteristics.LENS_FACING_FRONT
+        } else {
+            CameraCharacteristics.LENS_FACING_BACK
+        }
+        return cameraManager.cameraIdList.firstOrNull {
+            cameraManager.getCameraCharacteristics(it)
+                .get(CameraCharacteristics.LENS_FACING) == wanted
+        } ?: cameraManager.cameraIdList.firstOrNull()
+    }
+
+    /** Nearest supported encoder size to the requested width, 16:9 preferred. */
+    private fun chooseSize(cameraId: String): Pair<Int, Int> {
+        val map = cameraManager.getCameraCharacteristics(cameraId)
+            .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        val candidates = map?.getOutputSizes(MediaCodec::class.java)?.toList().orEmpty()
+        val best = candidates
+            .filter { it.width <= 1920 && it.height <= 1080 }
+            .minByOrNull { kotlin.math.abs(it.width - width) }
+            ?: return width to (width * 9 / 16)
+        return best.width to best.height
+    }
+
+    private fun startEncoder(w: Int, h: Int) {
+        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT,
+                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
+            setInteger(MediaFormat.KEY_BITRATE_MODE,
+                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            setInteger(MediaFormat.KEY_PRIORITY, 0)
+            setInteger(MediaFormat.KEY_LATENCY, 0)
+        }
+        val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+        codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        this.codec = codec
+        inputSurface = codec.createInputSurface()
+        codec.start()
+        thread(name = "camera-drain") { drainLoop(codec) }
+    }
+
+    @SuppressLint("MissingPermission") // the service checks CAMERA before starting
+    private fun openCamera(cameraId: String) {
+        cameraManager.openCamera(cameraId, executor, object : CameraDevice.StateCallback() {
+            override fun onOpened(camera: CameraDevice) {
+                device = camera
+                val surface = inputSurface ?: return
+                val config = SessionConfiguration(
+                    SessionConfiguration.SESSION_REGULAR,
+                    listOf(OutputConfiguration(surface)),
+                    executor,
+                    object : CameraCaptureSession.StateCallback() {
+                        override fun onConfigured(configured: CameraCaptureSession) {
+                            session = configured
+                            val request = camera
+                                .createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
+                                .apply {
+                                    addTarget(surface)
+                                    set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                                        Range(fps, fps))
+                                }
+                                .build()
+                            runCatching {
+                                configured.setRepeatingRequest(request, null, handler)
+                            }.onFailure { Log.e(TAG, "repeating request failed", it) }
+                        }
+
+                        override fun onConfigureFailed(s: CameraCaptureSession) {
+                            Log.e(TAG, "capture session configuration failed")
+                            stop()
+                        }
+                    })
+                runCatching { camera.createCaptureSession(config) }
+                    .onFailure { Log.e(TAG, "createCaptureSession failed", it) }
+            }
+
+            override fun onDisconnected(camera: CameraDevice) {
+                Log.w(TAG, "camera disconnected")
+                stop()
+            }
+
+            override fun onError(camera: CameraDevice, error: Int) {
+                Log.e(TAG, "camera error $error")
+                stop()
+            }
+        })
+    }
+
+    private fun drainLoop(codec: MediaCodec) {
+        val info = MediaCodec.BufferInfo()
+        try {
+            while (running) {
+                val index = codec.dequeueOutputBuffer(info, 100_000)
+                when {
+                    index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        val f = codec.outputFormat
+                        val csd0 = f.getByteBuffer("csd-0")
+                        val csd1 = f.getByteBuffer("csd-1")
+                        if (csd0 != null && csd1 != null) {
+                            val config = ByteArray(csd0.remaining() + csd1.remaining())
+                            csd0.get(config, 0, csd0.remaining())
+                            csd1.get(config, config.size - csd1.remaining(), csd1.remaining())
+                            configFrame = config
+                            sink(BinaryFrames.TYPE_CODEC_CONFIG, 0, config)
+                        }
+                    }
+                    index >= 0 -> {
+                        val buffer = codec.getOutputBuffer(index)!!
+                        val data = ByteArray(info.size)
+                        buffer.position(info.offset)
+                        buffer.get(data)
+                        codec.releaseOutputBuffer(index, false)
+                        if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
+                            configFrame = data
+                            sink(BinaryFrames.TYPE_CODEC_CONFIG, 0, data)
+                        } else {
+                            val key = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
+                            if (key) {
+                                configFrame?.let {
+                                    sink(BinaryFrames.TYPE_CODEC_CONFIG, 0, it)
+                                }
+                            }
+                            sink(
+                                if (key) BinaryFrames.TYPE_KEYFRAME else BinaryFrames.TYPE_DELTA,
+                                info.presentationTimeUs, data)
+                        }
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "camera drain ended: $t")
+        } finally {
+            runCatching { codec.stop() }
+            runCatching { codec.release() }
+            runCatching { inputSurface?.release() }
+            thread.quitSafely()
+            Log.i(TAG, "camera stopped")
+        }
+    }
+
+    private companion object {
+        const val TAG = "CameraStreamer"
+    }
+}

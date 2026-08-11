@@ -66,6 +66,8 @@ class ConnectionService : Service() {
         val peerName: String? = null,
         val pairing: PairingUi? = null,
         val mirrorConsentPending: Boolean = false,
+        val cameraPermissionNeeded: Boolean = false,
+        val cameraActive: Boolean = false,
     )
 
     companion object {
@@ -84,7 +86,7 @@ class ConnectionService : Service() {
          *  connected, so the Mac can tell the user when control is unavailable. */
         val capabilities: List<String>
             get() = buildList {
-                addAll(listOf("clipboard", "ring", "fs", "mirror"))
+                addAll(listOf("clipboard", "ring", "fs", "mirror", "camera"))
                 if (com.akram.ecosystem.accessibility.RemoteInput.isAvailable) add("input")
             }
 
@@ -319,6 +321,9 @@ class ConnectionService : Service() {
                 Log.i(TAG, "transfer ${m.payload.token}: ok=${m.payload.ok}")
             is Message.MirrorStart -> handleMirrorStart(envelope.id, m.payload)
             Message.MirrorStop -> pauseMirroring()
+            is Message.CameraStart -> handleCameraStart(envelope.id, m.payload)
+            is Message.CameraSwitchLens -> handleCameraSwitchLens(m.payload.lens)
+            Message.CameraStop -> stopCamera()
             is Message.InputTap -> {
                 val (w, h) = screenSize()
                 com.akram.ecosystem.accessibility.RemoteInput.tap(
@@ -471,6 +476,13 @@ class ConnectionService : Service() {
                         runMirrorStream(socket)
                     } else {
                         Log.w(TAG, "unknown mirror token")
+                    }
+                }
+                "camera" -> {
+                    if (attach.token == cameraToken) {
+                        runCameraStream(socket)
+                    } else {
+                        Log.w(TAG, "unknown camera token")
                     }
                 }
                 "file" -> {
@@ -885,6 +897,123 @@ class ConnectionService : Service() {
             }
         }
         com.akram.ecosystem.accessibility.RemoteInput.setKeepAwake(true)
+    }
+
+    // MARK: camera
+
+    private var cameraStreamer: com.akram.ecosystem.features.CameraStreamer? = null
+    private var cameraToken: String? = null
+    private var cameraLens = "back"
+    private var cameraRequest: com.akram.ecosystem.core.CameraStartPayload? = null
+    @Volatile
+    private var cameraSocket: SSLSocket? = null
+    private val cameraWriteLock = Any()
+    private val pendingCameraFrames = ArrayDeque<Triple<Int, Long, ByteArray>>()
+
+    private fun cameraGranted() =
+        checkSelfPermission(android.Manifest.permission.CAMERA) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun handleCameraStart(
+        requestId: String,
+        payload: com.akram.ecosystem.core.CameraStartPayload,
+    ) {
+        if (!cameraGranted()) {
+            _state.value = _state.value.copy(cameraPermissionNeeded = true)
+            sendMessage(Message.Error(ErrorPayload(
+                "camera_permission", "Allow camera access in the Ecosystem app")),
+                replyTo = requestId)
+            return
+        }
+        stopCamera()
+        cameraRequest = payload
+        cameraLens = payload.lens
+        try {
+            // Android only allows a camera foreground service to start while the
+            // app is visible, so the service runs it under connectedDevice and
+            // keeps the capture tied to this connection instead.
+            val streamer = com.akram.ecosystem.features.CameraStreamer(
+                context = this,
+                width = payload.width,
+                fps = payload.fps,
+                bitrateBps = payload.bitrateBps,
+                sink = { type, pts, data -> emitCameraFrame(type, pts, data) })
+            streamer.start(payload.lens)
+            cameraStreamer = streamer
+            val token = UUID.randomUUID().toString()
+            cameraToken = token
+            synchronized(pendingCameraFrames) { pendingCameraFrames.clear() }
+            _state.value = _state.value.copy(cameraActive = true)
+            updateNotification("Camera streaming to your Mac")
+            sendMessage(Message.CameraStarted(
+                com.akram.ecosystem.core.CameraStartedPayload(
+                    height = streamer.height, token = token, width = payload.width)),
+                replyTo = requestId)
+        } catch (t: Throwable) {
+            Log.e(TAG, "camera start failed", t)
+            stopCamera()
+            sendMessage(Message.Error(ErrorPayload("camera_error", t.message)),
+                replyTo = requestId)
+        }
+    }
+
+    private fun handleCameraSwitchLens(lens: String) {
+        val request = cameraRequest ?: return
+        val id = UUID.randomUUID().toString()
+        handleCameraStart(id, request.copy(lens = lens))
+    }
+
+    private fun emitCameraFrame(type: Int, pts: Long, data: ByteArray) {
+        val socket = cameraSocket
+        if (socket == null) {
+            synchronized(pendingCameraFrames) {
+                if (pendingCameraFrames.size > 120) pendingCameraFrames.clear()
+                pendingCameraFrames += Triple(type, pts, data)
+            }
+            return
+        }
+        try {
+            synchronized(cameraWriteLock) {
+                socket.outputStream.write(BinaryFrames.encode(type, pts, data))
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "camera socket write failed: $t")
+            stopCamera()
+        }
+    }
+
+    private fun runCameraStream(socket: SSLSocket) {
+        Log.i(TAG, "camera stream attached")
+        synchronized(pendingCameraFrames) {
+            for ((type, pts, data) in pendingCameraFrames) {
+                runCatching { socket.outputStream.write(BinaryFrames.encode(type, pts, data)) }
+            }
+            pendingCameraFrames.clear()
+            cameraSocket = socket
+        }
+        cameraStreamer?.cachedConfig()?.let {
+            emitCameraFrame(BinaryFrames.TYPE_CODEC_CONFIG, 0, it)
+        }
+        cameraStreamer?.requestKeyframe()
+        runCatching { while (socket.inputStream.read() >= 0) Unit }
+        if (cameraSocket === socket) {
+            cameraSocket = null
+            stopCamera()
+        }
+    }
+
+    private fun stopCamera() {
+        cameraStreamer?.stop()
+        cameraStreamer = null
+        cameraToken = null
+        runCatching { cameraSocket?.close() }
+        cameraSocket = null
+        synchronized(pendingCameraFrames) { pendingCameraFrames.clear() }
+        if (_state.value.cameraActive) {
+            _state.value = _state.value.copy(cameraActive = false)
+            updateNotification(_state.value.peerName?.let { "Connected to $it" }
+                ?: "Waiting for your Mac…")
+        }
     }
 
     /** Detaches the viewer but leaves capture running for an instant re-open. */
