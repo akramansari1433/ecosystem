@@ -910,9 +910,23 @@ class ConnectionService : Service() {
     private val cameraWriteLock = Any()
     private val pendingCameraFrames = ArrayDeque<Triple<Int, Long, ByteArray>>()
 
-    private fun cameraGranted() =
-        checkSelfPermission(android.Manifest.permission.CAMERA) ==
+    private fun cameraGranted(): Boolean {
+        val granted = checkSelfPermission(android.Manifest.permission.CAMERA) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted && _state.value.cameraPermissionNeeded) {
+            _state.value = _state.value.copy(cameraPermissionNeeded = false)
+        }
+        return granted
+    }
+
+    /** The Mac asked for the camera while the app was hidden; retry once visible. */
+    private var pendingCameraRequest: Pair<String, com.akram.ecosystem.core.CameraStartPayload>? = null
+
+    fun onAppForeground() {
+        val pending = pendingCameraRequest ?: return
+        pendingCameraRequest = null
+        handleCameraStart(pending.first, pending.second)
+    }
 
     private fun handleCameraStart(
         requestId: String,
@@ -920,18 +934,37 @@ class ConnectionService : Service() {
     ) {
         if (!cameraGranted()) {
             _state.value = _state.value.copy(cameraPermissionNeeded = true)
+            bringAppToFront()
             sendMessage(Message.Error(ErrorPayload(
                 "camera_permission", "Allow camera access in the Ecosystem app")),
                 replyTo = requestId)
+            return
+        }
+        // Android 14+ refuses camera access to a background service: the capture
+        // session dies with "Broken pipe". The app has to be on screen, and the
+        // service has to carry the camera foreground type.
+        if (!MainActivity.isVisible) {
+            pendingCameraRequest = requestId to payload
+            bringAppToFront()
+            scope.launch {
+                kotlinx.coroutines.delay(4000)
+                if (pendingCameraRequest?.first == requestId) {
+                    pendingCameraRequest = null
+                    sendMessage(Message.Error(ErrorPayload(
+                        "camera_foreground", "Open Ecosystem on the phone to start the camera")),
+                        replyTo = requestId)
+                }
+            }
             return
         }
         stopCamera()
         cameraRequest = payload
         cameraLens = payload.lens
         try {
-            // Android only allows a camera foreground service to start while the
-            // app is visible, so the service runs it under connectedDevice and
-            // keeps the capture tied to this connection instead.
+            startForeground(
+                NOTIFICATION_ID, buildNotification("Camera streaming to your Mac"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
             val streamer = com.akram.ecosystem.features.CameraStreamer(
                 context = this,
                 width = payload.width,
@@ -1002,6 +1035,13 @@ class ConnectionService : Service() {
         }
     }
 
+    private fun bringAppToFront() {
+        runCatching {
+            startActivity(Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        }
+    }
+
     private fun stopCamera() {
         cameraStreamer?.stop()
         cameraStreamer = null
@@ -1011,8 +1051,12 @@ class ConnectionService : Service() {
         synchronized(pendingCameraFrames) { pendingCameraFrames.clear() }
         if (_state.value.cameraActive) {
             _state.value = _state.value.copy(cameraActive = false)
-            updateNotification(_state.value.peerName?.let { "Connected to $it" }
-                ?: "Waiting for your Mac…")
+            // Drop the camera foreground type again.
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(_state.value.peerName?.let { "Connected to $it" }
+                    ?: "Waiting for your Mac…"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         }
     }
 

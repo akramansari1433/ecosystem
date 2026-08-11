@@ -78,12 +78,34 @@ final class CameraSession {
 
     private func run() async {
         do {
-            let reply = try await manager.request(
-                .cameraStart(.init(
-                    bitrateBps: 6_000_000, fps: 30, lens: lens.rawValue, width: 1280)),
-                timeout: 20)
-            guard case .cameraStarted(let started) = reply.message else {
-                throw ConnectionManager.RequestError.remote("unexpected reply")
+            // Android only allows camera capture while the phone app is on screen,
+            // and the phone brings itself to the front when asked — so retry for a
+            // few seconds rather than failing the moment it is still in the
+            // background or the permission has only just been granted.
+            var started: CameraStartedPayload?
+            var lastError: String?
+            for attempt in 0..<6 {
+                if Task.isCancelled { return }
+                do {
+                    let reply = try await manager.request(
+                        .cameraStart(.init(
+                            bitrateBps: 6_000_000, fps: 30,
+                            lens: lens.rawValue, width: 1280)),
+                        timeout: 20)
+                    if case .cameraStarted(let payload) = reply.message {
+                        started = payload
+                        break
+                    }
+                    lastError = "unexpected reply"
+                } catch ConnectionManager.RequestError.remote(let message) {
+                    lastError = message
+                }
+                phase = .starting
+                try await Task.sleep(for: .seconds(attempt == 0 ? 1.5 : 2))
+            }
+            guard let started else {
+                phase = .failed(lastError ?? "The phone did not start its camera.")
+                return
             }
             videoSize = CGSize(width: started.width, height: started.height)
 

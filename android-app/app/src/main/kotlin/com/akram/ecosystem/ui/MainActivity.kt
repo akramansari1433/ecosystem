@@ -43,6 +43,24 @@ import androidx.compose.ui.unit.sp
 import com.akram.ecosystem.service.ConnectionService
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        /** Android grants camera access to a service only while the app is visible. */
+        @Volatile
+        var isVisible = false
+            private set
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isVisible = true
+        ConnectionService.instance?.onAppForeground()
+    }
+
+    override fun onPause() {
+        isVisible = false
+        super.onPause()
+    }
+
     private val requestNotifications =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -161,14 +179,7 @@ fun StatusScreen(
             }
 
             if (state.cameraPermissionNeeded) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Your Mac wants to use this camera",
-                            fontWeight = FontWeight.SemiBold)
-                        Button(onClick = onAllowCamera) { Text("Allow camera") }
-                    }
-                }
+                CameraPermissionCard(onAllowCamera)
             }
 
             ClipboardSetupCard()
@@ -183,6 +194,34 @@ fun StatusScreen(
         }
     }
 }
+
+@Composable
+private fun CameraPermissionCard(onAllowCamera: () -> Unit) {
+    val context = LocalContext.current
+    var granted by remember { mutableStateOf(hasCameraPermission(context)) }
+    LifecycleResumeEffect(Unit) {
+        granted = hasCameraPermission(context)
+        onPauseOrDispose { }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (granted) {
+                Text("Camera is allowed", fontWeight = FontWeight.SemiBold)
+                Text("Press Start again in the camera window on your Mac.",
+                    style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Text("Your Mac wants to use this camera",
+                    fontWeight = FontWeight.SemiBold)
+                Button(onClick = onAllowCamera) { Text("Allow camera") }
+            }
+        }
+    }
+}
+
+private fun hasCameraPermission(context: Context): Boolean =
+    context.checkSelfPermission(Manifest.permission.CAMERA) ==
+        PackageManager.PERMISSION_GRANTED
 
 @Composable
 private fun ClipboardSetupCard() {

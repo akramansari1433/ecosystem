@@ -46,7 +46,12 @@ struct CameraWindow: View {
         case .starting:
             VStack(spacing: 12) {
                 ProgressView()
-                Text("Starting the phone's camera…").foregroundStyle(.secondary)
+                Text("Starting the phone's camera…").font(.headline)
+                Text("Android needs the Ecosystem app open on the phone while the\n"
+                     + "camera is in use — it is being brought to the front now.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         case .streaming:
             CameraSurface(layer: session.displayLayer)
@@ -54,11 +59,20 @@ struct CameraWindow: View {
         case .failed(let reason):
             ContentUnavailableView(
                 "Camera unavailable", systemImage: "exclamationmark.triangle",
-                description: Text(reason.contains("camera_permission")
-                                  || reason.lowercased().contains("allow camera")
-                                  ? "Open Ecosystem on the phone and allow camera access."
-                                  : reason))
+                description: Text(explain(reason)))
         }
+    }
+
+    private func explain(_ reason: String) -> String {
+        let text = reason.lowercased()
+        if text.contains("allow camera") || text.contains("permission") {
+            return "Open Ecosystem on the phone and tap Allow camera, then press Start."
+        }
+        if text.contains("open ecosystem") || text.contains("foreground") {
+            return "Open the Ecosystem app on the phone and keep it on screen, "
+                + "then press Start. Android does not allow camera use otherwise."
+        }
+        return reason
     }
 
     private var controls: some View {
