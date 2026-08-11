@@ -5,6 +5,8 @@ struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
     let manager: ConnectionManager
 
+    @State private var confirmingForget = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -52,21 +54,51 @@ struct MenuContent: View {
 
             Divider()
 
-            if appState.paired {
-                MenuRow(icon: "minus.circle", title: "Forget this phone…") {
-                    manager.forgetPhone()
-                }
+            footer
                 .padding(8)
-                Divider()
-            }
-
-            MenuRow(icon: "power", title: "Quit Ecosystem") {
-                NSApplication.shared.terminate(nil)
-            }
-            .padding(8)
-            .keyboardShortcut("q")
         }
         .frame(width: 290)
+        .onAppear { confirmingForget = false }
+    }
+
+    // MARK: footer
+
+    /// Quit and “forget this phone” share one row, but not equal billing: quitting
+    /// is routine and keeps the full label, while unpairing is rare and destructive,
+    /// so it is a small icon that asks for confirmation in place. (A real `.alert`
+    /// dies with the menu-bar panel the moment it loses focus.)
+    @ViewBuilder
+    private var footer: some View {
+        if confirmingForget {
+            HStack(spacing: 8) {
+                Text("Forget \(appState.phoneName ?? "this phone")?")
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Button("Cancel") { confirmingForget = false }
+                Button("Forget") {
+                    confirmingForget = false
+                    manager.forgetPhone()
+                }
+                .tint(.red)
+            }
+            .controlSize(.small)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 3)
+        } else {
+            HStack(spacing: 4) {
+                MenuRow(icon: "power", title: "Quit Ecosystem") {
+                    NSApplication.shared.terminate(nil)
+                }
+                .keyboardShortcut("q")
+
+                if appState.paired {
+                    IconButton(icon: "iphone.slash", help: "Forget this phone") {
+                        confirmingForget = true
+                    }
+                }
+            }
+        }
     }
 
     private var ready: Bool { appState.connected && appState.paired }
@@ -174,6 +206,30 @@ struct MenuContent: View {
         .frame(maxWidth: .infinity)
         .padding(12)
         .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// Small square icon button for a secondary action sitting beside a full row.
+private struct IconButton: View {
+    let icon: String
+    let help: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .frame(width: 26, height: 26)
+                .foregroundStyle(hovering ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                .background(hovering ? Color.primary.opacity(0.08) : .clear,
+                            in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .onHover { hovering = $0 }
     }
 }
 
