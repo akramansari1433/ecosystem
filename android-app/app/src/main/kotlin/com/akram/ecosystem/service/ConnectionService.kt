@@ -626,7 +626,10 @@ class ConnectionService : Service() {
                 PairingEngine.Role.RESPONDER, ownDer = identity.certDer, peerDer = nonce)
         }
         val engine = pairingEngine ?: return
-        val session = session ?: return
+        // Taps from this phone's own UI carry no session: they belong to whichever
+        // Mac started the pairing. Without this fallback, Accept and Reject did
+        // nothing at all.
+        val session = session ?: pairingSession ?: return
         for (effect in engine.handle(input)) {
             when (effect) {
                 is PairingEngine.Effect.Send -> session.send(effect.message)
