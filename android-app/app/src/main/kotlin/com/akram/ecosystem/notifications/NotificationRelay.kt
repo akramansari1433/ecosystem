@@ -37,9 +37,15 @@ class NotificationRelay : NotificationListenerService() {
                 ?.any { it.substringBefore("/") == context.packageName } == true
     }
 
+    /** key → content hash of the last relayed payload, to drop no-op re-posts. */
+    private val lastRelayed = HashMap<String, Int>()
+
     override fun onListenerConnected() {
         instance = this
         Log.i(TAG, "listener connected")
+        // The system binds this listener early after boot: a second chance to
+        // bring the connection service up if BOOT_COMPLETED was missed/delayed.
+        if (ConnectionService.instance == null) ConnectionService.start(this)
     }
 
     override fun onListenerDisconnected() {
@@ -52,11 +58,22 @@ class NotificationRelay : NotificationListenerService() {
             Log.d(TAG, "skipped ${sbn.key}")
             return
         }
+        // Apps re-post the same notification constantly (progress ticks, group
+        // re-sorts, alert-once refreshes). The phone only buzzes the first
+        // time; the Mac should only banner the first time too.
+        val signature = payload.copy(whenMs = 0).hashCode()
+        synchronized(lastRelayed) {
+            if (lastRelayed.put(sbn.key, signature) == signature) {
+                Log.d(TAG, "unchanged ${sbn.key}")
+                return
+            }
+        }
         Log.d(TAG, "relaying ${sbn.key}")
         ConnectionService.instance?.notifyPosted(payload)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        synchronized(lastRelayed) { lastRelayed.remove(sbn.key) }
         // Unconditional: telling the Mac about a notification it never showed is
         // a harmless no-op, and cheaper than re-running the filter.
         ConnectionService.instance?.notifyDismissed(sbn.key)
