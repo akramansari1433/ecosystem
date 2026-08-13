@@ -57,7 +57,13 @@ final class NotificationMirror: NSObject {
 
         // Same identifier replaces: updates to one conversation don't stack.
         center.add(UNNotificationRequest(identifier: p.key, content: content,
-                                         trigger: nil))
+                                         trigger: nil)) { error in
+            if let error {
+                log.warning("add \(p.app, privacy: .public): \(error, privacy: .public)")
+            } else {
+                log.info("delivered \(p.app, privacy: .public)")
+            }
+        }
     }
 
     func handleDismissed(key: String) {

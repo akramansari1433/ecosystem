@@ -47,7 +47,12 @@ class NotificationRelay : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        val payload = describe(sbn) ?: return
+        val payload = describe(sbn)
+        if (payload == null) {
+            Log.d(TAG, "skipped ${sbn.key}")
+            return
+        }
+        Log.d(TAG, "relaying ${sbn.key}")
         ConnectionService.instance?.notifyPosted(payload)
     }
 
