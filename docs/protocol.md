@@ -178,7 +178,7 @@ message types until it succeeds.
 
 | type | payload |
 |---|---|
-| `stream.attach` | `{ token, kind: "file" \| "mirror" \| "camera" }` |
+| `stream.attach` | `{ token, kind: "file" \| "mirror" \| "camera" \| "audio" }` |
 
 `token`: opaque string issued by the phone in `fs.transferReady` / `mirror.started` /
 `camera.started`. Unknown or reused token → close connection.
@@ -194,6 +194,13 @@ message types until it succeeds.
 
 Video flows on a stream connection (`kind: "mirror"`): frameType 0 config, then 1/2
 frames. Phone resends config before every keyframe.
+
+While mirroring, the Mac may attach a second stream with the same token and
+`kind: "audio"`. The phone answers with frameType 5 chunks: raw PCM, 48 kHz,
+stereo, 16-bit little-endian, ~20 ms each — whatever the phone is playing
+(apps can opt out of capture; cellular call audio is never available). The
+stream needs the phone's one-time microphone grant; without it the phone
+keeps the connection silent.
 
 ## 11. Notifications
 

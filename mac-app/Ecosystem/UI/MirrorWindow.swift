@@ -254,6 +254,16 @@ struct MirrorWindow: View {
                 if session.phase == .streaming {
                     ToolbarItem {
                         Button(
+                            "Phone audio",
+                            systemImage: session.audioMuted
+                                ? "speaker.slash" : "speaker.wave.2"
+                        ) {
+                            session.audioMuted.toggle()
+                        }
+                        .help("Play the phone's sound through this Mac")
+                    }
+                    ToolbarItem {
+                        Button(
                             "Dim phone",
                             systemImage: session.phoneDimmed
                                 ? "sun.min.fill" : "sun.max"

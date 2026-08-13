@@ -15,6 +15,7 @@
 		0DC24AC80033BFEC2452280D /* DeviceBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149B418FD7D5021324F0B77A /* DeviceBrowser.swift */; };
 		11A0D8EDBE5CB893349D39BF /* H264Assembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01C9702A34C121B7AA70421 /* H264Assembler.swift */; };
 		2292B4EDC9F6D39058FF944C /* StreamConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */; };
+		3900C4AE09BC67D4BFB6F13C /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5727B907FA359DDC5DA97E7B /* AudioPlayer.swift */; };
 		3A9DF5EC35CFCE329BB6835E /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = A760FAAD24D7764BF66763BD /* AppIcon.icns */; };
 		3ABC86EB39404ACC14CCB4BB /* ClipboardSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BB3230DAE77ACE2C1F815C /* ClipboardSync.swift */; };
 		472EEEB6FD9298D0887404CA /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003CE1F6634354A0762DDD21 /* AppState.swift */; };
@@ -45,6 +46,7 @@
 		4C35F543B765A6ACDA71208A /* NotificationMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationMirror.swift; sourceTree = "<group>"; };
 		4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamConnection.swift; sourceTree = "<group>"; };
 		4F97B7789670B31B8A473C61 /* EcosystemApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EcosystemApp.swift; sourceTree = "<group>"; };
+		5727B907FA359DDC5DA97E7B /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
 		5C90C4DDE6E434D78F959671 /* Identity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identity.swift; sourceTree = "<group>"; };
 		6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorWindow.swift; sourceTree = "<group>"; };
 		684502EFA95A06C656943815 /* PairByScanWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairByScanWindow.swift; sourceTree = "<group>"; };
@@ -89,6 +91,7 @@
 		1796578CCCBB33AE96161D6C /* Mirroring */ = {
 			isa = PBXGroup;
 			children = (
+				5727B907FA359DDC5DA97E7B /* AudioPlayer.swift */,
 				A01C9702A34C121B7AA70421 /* H264Assembler.swift */,
 				D1C5509329948F276C59FB9F /* MirrorSession.swift */,
 			);
@@ -241,6 +244,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				472EEEB6FD9298D0887404CA /* AppState.swift in Sources */,
+				3900C4AE09BC67D4BFB6F13C /* AudioPlayer.swift in Sources */,
 				E343F3D4B7D06BF2A83473B7 /* BinaryFrames.swift in Sources */,
 				D7F9384856882A254138465A /* CameraSession.swift in Sources */,
 				D519C5C2FAC068D519D69598 /* CameraWindow.swift in Sources */,

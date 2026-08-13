@@ -27,6 +27,7 @@ object BinaryFrames {
     const val TYPE_DELTA = 2
     const val TYPE_FILE_CHUNK = 3
     const val TYPE_END = 4
+    const val TYPE_AUDIO = 5
 
     const val MAX_FRAME_BYTES = 8 * 1024 * 1024
     const val FILE_CHUNK_BYTES = 256 * 1024

@@ -526,13 +526,20 @@ class ConnectionService : Service() {
         try {
             // Video streams are one-way: the Mac sends nothing once attached, so
             // the control connection's 35s read timeout would end them mid-session.
-            if (attach.kind == "mirror" || attach.kind == "camera") socket.soTimeout = 0
+            if (attach.kind != "file") socket.soTimeout = 0
             when (attach.kind) {
                 "mirror" -> {
                     if (attach.token == mirrorToken) {
                         runMirrorStream(socket)
                     } else {
                         Log.w(TAG, "unknown mirror token")
+                    }
+                }
+                "audio" -> {
+                    if (attach.token == mirrorToken) {
+                        runAudioStream(socket)
+                    } else {
+                        Log.w(TAG, "unknown audio token")
                     }
                 }
                 "camera" -> {
@@ -971,6 +978,49 @@ class ConnectionService : Service() {
         }
     }
 
+    /**
+     * Streams the phone's playback audio (48 kHz stereo s16le PCM, TYPE_AUDIO
+     * frames) alongside the mirror video, for as long as the Mac keeps the
+     * connection open. Missing RECORD_AUDIO just means silent mirroring.
+     */
+    private fun runAudioStream(socket: SSLSocket) {
+        val projection = liveProjection ?: run {
+            Log.w(TAG, "audio attach without live projection"); return
+        }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "audio attach without RECORD_AUDIO; mirroring stays silent")
+            return
+        }
+        Log.i(TAG, "audio stream attached")
+        val writeLock = Any()
+        val streamer = com.akram.ecosystem.features.AudioStreamer(projection) { pts, pcm ->
+            try {
+                synchronized(writeLock) {
+                    socket.outputStream.write(
+                        BinaryFrames.encode(BinaryFrames.TYPE_AUDIO, pts, pcm))
+                }
+            } catch (t: Throwable) {
+                runCatching { socket.close() }
+            }
+        }
+        audioStreamer?.stop()
+        audioStreamer = streamer
+        try {
+            streamer.start()
+        } catch (t: Throwable) {
+            Log.w(TAG, "audio capture failed: $t")
+            return
+        }
+        // Block until the Mac closes the stream, then release the recorder.
+        runCatching { while (socket.inputStream.read() >= 0) Unit }
+        streamer.stop()
+        if (audioStreamer === streamer) audioStreamer = null
+        Log.i(TAG, "audio stream detached")
+    }
+
+    private var audioStreamer: com.akram.ecosystem.features.AudioStreamer? = null
+
     private fun runMirrorStream(socket: SSLSocket) {
         Log.i(TAG, "mirror stream attached")
         synchronized(pendingMirrorFrames) {
@@ -1188,6 +1238,8 @@ class ConnectionService : Service() {
 
     private fun stopMirroring() {
         idleMirrorJob?.cancel()
+        audioStreamer?.stop()
+        audioStreamer = null
         com.akram.ecosystem.accessibility.RemoteInput.setKeepAwake(false)
         detachMirrorStream()
         mirrorEncoder?.stop()

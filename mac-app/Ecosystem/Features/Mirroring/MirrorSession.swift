@@ -21,6 +21,13 @@ final class MirrorSession {
     let displayLayer = AVSampleBufferDisplayLayer()
 
     var phase: Phase = .idle
+
+    /// Phone audio playback; muted from the mirror window's toolbar.
+    private let audio = AudioPlayer()
+    private var audioTask: Task<Void, Never>?
+    var audioMuted = false {
+        didSet { audio.muted = audioMuted }
+    }
     var videoSize = CGSize(width: 9, height: 16)
 
     private var streamTask: Task<Void, Never>?
@@ -42,6 +49,9 @@ final class MirrorSession {
     func stop() {
         streamTask?.cancel()
         streamTask = nil
+        audioTask?.cancel()
+        audioTask = nil
+        audio.stop()
         Task { await stream?.closeStream() }
         stream = nil
         manager.send(.mirrorStop)
@@ -116,6 +126,7 @@ final class MirrorSession {
             let assembler = H264Assembler()
             phase = .streaming
             log.info("mirror streaming \(started.width)x\(started.height)")
+            audioTask = Task { await runAudio(token: started.token) }
 
             for try await frame in await stream.frames(token: started.token, kind: "mirror") {
                 if Task.isCancelled { break }
@@ -143,11 +154,33 @@ final class MirrorSession {
                 }
             }
             if phase == .streaming { phase = .idle }
+            audioTask?.cancel()
+            audio.stop()
         } catch {
             log.warning("mirror session ended: \(error.localizedDescription, privacy: .public)")
             if !Task.isCancelled {
                 phase = .failed("Mirroring ended: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// Second stream, same token: the phone's playback audio. An old phone app
+    /// that doesn't know the "audio" kind simply never sends a frame, and the
+    /// mirror stays silent — video is unaffected either way.
+    private func runAudio(token: String) async {
+        do {
+            let stream = try manager.openStream()
+            audio.start()
+            defer { Task { await stream.closeStream() } }
+            for try await frame in await stream.frames(token: token, kind: "audio") {
+                if Task.isCancelled { break }
+                if frame.frameType == BinaryFrames.typeAudio {
+                    audio.enqueue(pcm16: frame.payload)
+                }
+            }
+        } catch {
+            log.info("audio stream ended: \(error.localizedDescription, privacy: .public)")
+        }
+        audio.stop()
     }
 }
