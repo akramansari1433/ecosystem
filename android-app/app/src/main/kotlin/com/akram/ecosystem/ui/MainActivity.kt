@@ -191,6 +191,7 @@ fun StatusScreen(
             PairByScanCard()
 
             ClipboardSetupCard()
+            NotificationSetupCard()
             StorageSetupCard()
 
             state.pairing?.let { pairing ->
@@ -333,6 +334,44 @@ private fun ClipboardSetupCard() {
                 Button(onClick = {
                     context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }) { Text("Open Accessibility settings") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationSetupCard() {
+    val context = LocalContext.current
+    var enabled by remember {
+        mutableStateOf(
+            com.akram.ecosystem.notifications.NotificationRelay.isEnabled(context))
+    }
+    LifecycleResumeEffect(Unit) {
+        enabled = com.akram.ecosystem.notifications.NotificationRelay.isEnabled(context)
+        onPauseOrDispose { }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (enabled) {
+                Text("Notifications on your Mac: on ✓", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "This phone's notifications appear on your Mac. Reply, answer " +
+                        "calls, or dismiss them from there.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                Text("See notifications on your Mac", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Grant notification access to show this phone's notifications " +
+                        "on your Mac — including incoming calls, with Answer and " +
+                        "Decline buttons.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Button(onClick = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }) { Text("Open Notification access") }
             }
         }
     }

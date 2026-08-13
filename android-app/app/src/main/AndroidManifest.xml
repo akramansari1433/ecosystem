@@ -64,6 +64,15 @@
         </service>
 
         <service
+            android:name=".notifications.NotificationRelay"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".service.ConnectionService"
             android:foregroundServiceType="connectedDevice|mediaProjection|camera"
             android:exported="false" />

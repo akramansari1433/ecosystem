@@ -143,6 +143,41 @@ object RemoteInput {
     private var knownText: String? = null
 
     /** Anything that can move focus invalidates what we think the field holds. */
+    /**
+     * After a call is answered from the Mac, click the in-call screen's Speaker
+     * button so the user can talk without picking the phone up. Best effort:
+     * retries for a few seconds while the in-call UI appears, then gives up
+     * silently (e.g. when the Mac pressed Decline and no call screen exists).
+     */
+    fun tapSpeakerSoon() {
+        var attempts = 0
+        lateinit var attempt: Runnable
+        attempt = Runnable {
+            val clicked = clickByLabel("Speaker")
+            if (!clicked && ++attempts < 8) handler.postDelayed(attempt, 500)
+        }
+        handler.postDelayed(attempt, 800)
+    }
+
+    private fun clickByLabel(label: String): Boolean {
+        val service = service ?: return false
+        val roots = (runCatching { service.windows }.getOrNull().orEmpty()
+            .mapNotNull { it.root } + listOfNotNull(service.rootInActiveWindow))
+        for (root in roots) {
+            val matches = root.findAccessibilityNodeInfosByText(label) ?: continue
+            for (node in matches) {
+                var candidate: android.view.accessibility.AccessibilityNodeInfo? = node
+                while (candidate != null && !candidate.isClickable) {
+                    candidate = candidate.parent
+                }
+                if (candidate?.performAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+                    == true) return true
+            }
+        }
+        return false
+    }
+
     fun resetTypingContext() {
         knownText = null
     }

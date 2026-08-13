@@ -195,6 +195,20 @@ message types until it succeeds.
 Video flows on a stream connection (`kind: "mirror"`): frameType 0 config, then 1/2
 frames. Phone resends config before every keyframe.
 
+## 11. Notifications
+
+The phone mirrors its notification shade to every connected Mac (needs the
+one-time "Notification access" grant on the phone). Buttons — including
+Answer/Decline on incoming calls — are pressed remotely by index, and reply
+buttons carry the Mac-typed text.
+
+| type | direction | payload |
+|---|---|---|
+| `notify.posted` | phone → Mac | `{ key, app, pkg, title, text, whenMs, category, clearable, actions: [{ title, reply }] }` — re-posting a `key` replaces it |
+| `notify.dismissed` | phone → Mac | `{ key }` (left the phone's shade for any reason) |
+| `notify.action` | Mac → phone | `{ key, action, reply? }` — `action` is an index into `actions`; `reply` is inline-reply text |
+| `notify.dismiss` | Mac → phone | `{ key }` (the user dismissed the Mac's copy) |
+
 ## 12. Input
 
 Coordinates are normalized 0…1 with the origin at the screen's top-left, so they are

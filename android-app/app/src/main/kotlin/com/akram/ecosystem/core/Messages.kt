@@ -210,6 +210,39 @@ data class FsTransferResultPayload(
     val token: String,
 )
 
+@Serializable
+data class NotifyActionInfo(
+    val title: String,
+    /** True when the button accepts inline reply text (a RemoteInput). */
+    val reply: Boolean = false,
+)
+
+@Serializable
+data class NotifyPostedPayload(
+    /** The OS's stable notification key; identifies it for actions/dismissal. */
+    val key: String,
+    /** Human app name, e.g. "WhatsApp". */
+    val app: String,
+    val pkg: String = "",
+    val title: String = "",
+    val text: String = "",
+    val whenMs: Long = 0,
+    val category: String = "",
+    val clearable: Boolean = true,
+    val actions: List<NotifyActionInfo> = emptyList(),
+)
+
+@Serializable
+data class NotifyKeyPayload(val key: String)
+
+@Serializable
+data class NotifyActionPayload(
+    val key: String,
+    /** Index into the posted notification's `actions`. */
+    val action: Int,
+    val reply: String? = null,
+)
+
 sealed interface Message {
     data class Hello(val payload: HelloPayload) : Message
     data object Ping : Message
@@ -252,6 +285,10 @@ sealed interface Message {
     data class AuthChallenge(val payload: AuthChallengePayload) : Message
     data class AuthResponse(val payload: AuthResponsePayload) : Message
     data object AuthOK : Message
+    data class NotifyPosted(val payload: NotifyPostedPayload) : Message
+    data class NotifyDismissed(val payload: NotifyKeyPayload) : Message
+    data class NotifyAction(val payload: NotifyActionPayload) : Message
+    data class NotifyDismiss(val payload: NotifyKeyPayload) : Message
     data class Unknown(val type: String) : Message
 
     val typeString: String
@@ -297,6 +334,10 @@ sealed interface Message {
             is AuthChallenge -> "auth.challenge"
             is AuthResponse -> "auth.response"
             AuthOK -> "auth.ok"
+            is NotifyPosted -> "notify.posted"
+            is NotifyDismissed -> "notify.dismissed"
+            is NotifyAction -> "notify.action"
+            is NotifyDismiss -> "notify.dismiss"
             is Unknown -> type
         }
 }

@@ -179,6 +179,35 @@ struct FsTransferResultPayload: Codable, Equatable {
     let token: String
 }
 
+struct NotifyActionInfo: Codable, Equatable {
+    let title: String
+    /// True when the button accepts inline reply text.
+    let reply: Bool?
+}
+
+struct NotifyPostedPayload: Codable, Equatable {
+    let key: String
+    let app: String
+    let pkg: String?
+    let title: String?
+    let text: String?
+    let whenMs: Int64?
+    let category: String?
+    let clearable: Bool?
+    let actions: [NotifyActionInfo]?
+}
+
+struct NotifyKeyPayload: Codable, Equatable {
+    let key: String
+}
+
+struct NotifyActionPayload: Codable, Equatable {
+    let key: String
+    /// Index into the posted notification's `actions`.
+    let action: Int
+    var reply: String?
+}
+
 enum Message: Equatable {
     case hello(HelloPayload)
     case ping
@@ -221,6 +250,10 @@ enum Message: Equatable {
     case authChallenge(AuthChallengePayload)
     case authResponse(AuthResponsePayload)
     case authOK
+    case notifyPosted(NotifyPostedPayload)
+    case notifyDismissed(NotifyKeyPayload)
+    case notifyAction(NotifyActionPayload)
+    case notifyDismiss(NotifyKeyPayload)
     case unknown(String)
 
     var typeString: String {
@@ -266,6 +299,10 @@ enum Message: Equatable {
         case .authChallenge: "auth.challenge"
         case .authResponse: "auth.response"
         case .authOK: "auth.ok"
+        case .notifyPosted: "notify.posted"
+        case .notifyDismissed: "notify.dismissed"
+        case .notifyAction: "notify.action"
+        case .notifyDismiss: "notify.dismiss"
         case .unknown(let type): type
         }
     }

@@ -71,6 +71,10 @@ enum ProtocolCodec {
         case .cameraZoom(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .authChallenge(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .authResponse(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .notifyPosted(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .notifyDismissed(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .notifyAction(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
+        case .notifyDismiss(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .ping, .pong, .pairAccept, .pairReject, .pairConfirm,
              .ringStart, .ringStop, .ringStopped, .unknown,
              .mirrorNeedsConsent, .mirrorStop, .authOK, .cameraStop, .cameraList:
@@ -117,6 +121,10 @@ enum ProtocolCodec {
         case "pair.confirm": message = .pairConfirm
         case "pair.abort": message = .pairAbort(try payload(from: data, type: header.type))
         case "clipboard.set": message = .clipboardSet(try payload(from: data, type: header.type))
+        case "notify.posted": message = .notifyPosted(try payload(from: data, type: header.type))
+        case "notify.dismissed": message = .notifyDismissed(try payload(from: data, type: header.type))
+        case "notify.action": message = .notifyAction(try payload(from: data, type: header.type))
+        case "notify.dismiss": message = .notifyDismiss(try payload(from: data, type: header.type))
         case "ring.start": message = .ringStart
         case "ring.stop": message = .ringStop
         case "ring.stopped": message = .ringStopped

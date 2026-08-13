@@ -66,6 +66,10 @@ object ProtocolCodec {
             is Message.CameraZoom -> json.encodeToJsonElement(message.payload)
             is Message.AuthChallenge -> json.encodeToJsonElement(message.payload)
             is Message.AuthResponse -> json.encodeToJsonElement(message.payload)
+            is Message.NotifyPosted -> json.encodeToJsonElement(message.payload)
+            is Message.NotifyDismissed -> json.encodeToJsonElement(message.payload)
+            is Message.NotifyAction -> json.encodeToJsonElement(message.payload)
+            is Message.NotifyDismiss -> json.encodeToJsonElement(message.payload)
             else -> null
         }
         val body = json.encodeToString(
@@ -90,6 +94,10 @@ object ProtocolCodec {
             "pair.confirm" -> Message.PairConfirm
             "pair.abort" -> Message.PairAbort(payload(raw))
             "clipboard.set" -> Message.ClipboardSet(payload(raw))
+            "notify.posted" -> Message.NotifyPosted(payload(raw))
+            "notify.dismissed" -> Message.NotifyDismissed(payload(raw))
+            "notify.action" -> Message.NotifyAction(payload(raw))
+            "notify.dismiss" -> Message.NotifyDismiss(payload(raw))
             "ring.start" -> Message.RingStart
             "ring.stop" -> Message.RingStop
             "ring.stopped" -> Message.RingStopped

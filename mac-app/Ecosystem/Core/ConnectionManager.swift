@@ -31,6 +31,7 @@ final class ConnectionManager {
     private var watchdog: Timer?
 
     private let clipboard = ClipboardSync()
+    private let notifications = NotificationMirror()
     private var pendingReplies: [String: CheckedContinuation<InboundEnvelope, Error>] = [:]
     private(set) lazy var files = FileBrowserModel(manager: self)
     private(set) lazy var mirror = MirrorSession(manager: self)
@@ -71,6 +72,8 @@ final class ConnectionManager {
             self?.send(.clipboardSet(payload))
         }
         clipboard.start()
+        notifications.send = { [weak self] message in self?.send(message) }
+        notifications.start()
         browser.onDevicesChanged = { [weak self] devices in
             self?.devicesChanged(devices)
         }
@@ -311,6 +314,12 @@ final class ConnectionManager {
 
         case .ringStopped:
             appState.ringing = false
+
+        case .notifyPosted(let payload):
+            notifications.handlePosted(payload)
+
+        case .notifyDismissed(let payload):
+            notifications.handleDismissed(key: payload.key)
 
         case .fsTransferResult(let payload):
             files.handleTransferResult(payload)

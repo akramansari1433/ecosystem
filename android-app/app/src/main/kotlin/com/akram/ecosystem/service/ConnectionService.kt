@@ -22,6 +22,8 @@ import com.akram.ecosystem.core.ErrorPayload
 import com.akram.ecosystem.core.FileService
 import com.akram.ecosystem.core.FrameReader
 import com.akram.ecosystem.core.FsEntriesPayload
+import com.akram.ecosystem.core.NotifyKeyPayload
+import com.akram.ecosystem.core.NotifyPostedPayload
 import com.akram.ecosystem.core.FsTransferReadyPayload
 import com.akram.ecosystem.core.FsTransferResultPayload
 import com.akram.ecosystem.core.FsUploadPayload
@@ -314,6 +316,14 @@ class ConnectionService : Service() {
         sessions.values.filter { it.authenticated }.forEach { it.send(message) }
     }
 
+    /** Called by NotificationRelay: mirrors a phone notification to every Mac. */
+    fun notifyPosted(payload: NotifyPostedPayload) =
+        broadcast(Message.NotifyPosted(payload))
+
+    /** Called by NotificationRelay when a notification leaves the phone's shade. */
+    fun notifyDismissed(key: String) =
+        broadcast(Message.NotifyDismissed(NotifyKeyPayload(key)))
+
     private fun dispatch(envelope: InboundEnvelope, session: Session) {
         val message = envelope.message
         // Everything except the handshake requires an authenticated peer.
@@ -390,6 +400,12 @@ class ConnectionService : Service() {
                 com.akram.ecosystem.accessibility.RemoteInput.scroll(
                     m.payload.phase, (m.payload.x * w).toFloat(), (m.payload.y * h).toFloat())
             }
+            is Message.NotifyAction ->
+                com.akram.ecosystem.notifications.NotificationRelay.instance
+                    ?.performAction(m.payload.key, m.payload.action, m.payload.reply)
+            is Message.NotifyDismiss ->
+                com.akram.ecosystem.notifications.NotificationRelay.instance
+                    ?.dismiss(m.payload.key)
             else -> Log.d(TAG, "ignoring ${m.typeString}")
         }
     }
