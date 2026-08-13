@@ -200,7 +200,9 @@ While mirroring, the Mac may attach a second stream with the same token and
 stereo, 16-bit little-endian, ~20 ms each — whatever the phone is playing
 (apps can opt out of capture; cellular call audio is never available). The
 stream needs the phone's one-time microphone grant; without it the phone
-keeps the connection silent.
+keeps the connection silent. While the audio stream is attached the phone
+mutes its own media output — the sound follows the Mac, iPhone-style — and
+restores it when the stream ends.
 
 ## 11. Notifications
 

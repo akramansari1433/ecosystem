@@ -150,6 +150,7 @@ class ConnectionService : Service() {
     override fun onBind(intent: Intent?) = null
 
     override fun onDestroy() {
+        setMediaMuted(false)
         instance = null
         advertiser.unregister()
         multicastLock?.release()
@@ -1012,11 +1013,24 @@ class ConnectionService : Service() {
             Log.w(TAG, "audio capture failed: $t")
             return
         }
+        // The sound now belongs to the Mac, like iPhone Mirroring: capture taps
+        // the mix before the volume stage, so muting the phone's media output
+        // silences only the phone. Restored the moment the stream ends.
+        setMediaMuted(true)
         // Block until the Mac closes the stream, then release the recorder.
         runCatching { while (socket.inputStream.read() >= 0) Unit }
+        setMediaMuted(false)
         streamer.stop()
         if (audioStreamer === streamer) audioStreamer = null
         Log.i(TAG, "audio stream detached")
+    }
+
+    private fun setMediaMuted(muted: Boolean) {
+        runCatching {
+            getSystemService(AudioManager::class.java).adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                if (muted) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE, 0)
+        }.onFailure { Log.w(TAG, "media mute($muted) failed: $it") }
     }
 
     private var audioStreamer: com.akram.ecosystem.features.AudioStreamer? = null
@@ -1240,6 +1254,7 @@ class ConnectionService : Service() {
         idleMirrorJob?.cancel()
         audioStreamer?.stop()
         audioStreamer = null
+        setMediaMuted(false)
         com.akram.ecosystem.accessibility.RemoteInput.setKeepAwake(false)
         detachMirrorStream()
         mirrorEncoder?.stop()
