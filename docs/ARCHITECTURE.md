@@ -7,9 +7,11 @@ This explains the system twice: first in plain language, then in technical detai
 ## Part 1 — The short version
 
 Ecosystem makes your Android phone and your Mac behave like one set of devices, the
-way an iPhone does with a Mac. Copy on one, paste on the other. Browse the phone's
-photos in a window on the Mac. See and control the phone's screen from the Mac's
-keyboard and trackpad. Make the phone ring when it's lost down the sofa.
+way an iPhone does with a Mac. Copy on one, paste on the other. See the phone's
+notifications on the Mac and reply from there. Answer calls from the Mac. Browse the
+phone's photos in a window. See and control the phone's screen — sound included —
+from the Mac's keyboard and trackpad. Make the phone ring when it's lost down the
+sofa.
 
 **Everything happens directly between the two devices over your own Wi-Fi.** Nothing
 is uploaded, no account is needed, no company's server is involved. If your internet
@@ -22,16 +24,29 @@ mechanism printers use to appear in your Mac's printer list without you typing a
 address. The Mac listens for that shout and connects. That's why both devices must be
 on the same Wi-Fi.
 
+The phone app also starts itself: after a reboot, and after being updated. You never
+have to open it for the connection to come back.
+
 ### How they know it's really you
 
-The first time, the two apps show a **six-digit code**. You check the numbers match
-and confirm on both. That single act does two things: it proves nobody is
-impersonating your phone, and it lets both devices secretly agree on a shared password
-that only they know.
+The first time, you pair — once per Mac, and a phone can be paired with several Macs.
+Two ways, same result:
+
+- **Scan a QR code.** The Mac shows a code, the phone scans it. Being able to see the
+  Mac's screen *is* the proof the two devices belong together — nothing to compare,
+  nothing to type. Codes expire after a few minutes and work once.
+- **Compare six digits.** Both screens show the same six-digit number; you check they
+  match and confirm on both.
+
+Either way, both devices end up agreeing on a shared password that only they know —
+and the password itself never crosses the network, not even during pairing.
 
 From then on, every connection is encrypted, and the phone challenges the Mac to prove
 it knows that password before it will do anything. A stranger on your Wi-Fi cannot
 connect, read your clipboard, or see your screen.
+
+To undo it: the Mac's menu has **Forget this phone**, and the phone lists its paired
+Macs with a **Remove** button next to each. Removing a Mac cuts its access instantly.
 
 ### Who asks whom
 
@@ -56,9 +71,13 @@ switching networks, waking from sleep.
 | Feature | What actually happens |
 |---|---|
 | **Clipboard** | Whenever you copy, the text is sent to the other device and put on its clipboard. A few hundred bytes. |
+| **Notifications** | The phone forwards each notification's app name, title, text and buttons. Clicking a button on the Mac presses the real button on the phone; typing in the Mac's reply field sends the reply through the phone. Dismissing on either side clears the other. |
+| **Calls** | An incoming call is just a notification with Answer and Decline buttons, so those work from the Mac like any other button. After Answer, the phone flips itself to speakerphone. (The voice itself stays on the phone — Android only lets the manufacturer's own apps touch call audio.) |
 | **Ring** | The Mac says "ring"; the phone plays its alarm sound at full volume, even on silent. |
 | **Files** | The Mac asks "what's in this folder?" and gets a list back. Downloading opens a second, separate connection just for that file's bytes, so a big video doesn't block everything else. |
 | **Screen mirroring** | The phone compresses its screen into video (the same H.264 format as a video file) and streams it. Your clicks and keystrokes travel back the other way as instructions like "tap here" or "type this". |
+| **Mirroring sound** | Whatever the phone is playing is captured and streamed to the Mac alongside the video, and the phone mutes its own speaker while that's happening — the sound follows the Mac. Apps with DRM (Netflix and friends) opt out; their sound stays on the phone. |
+| **Camera** | The phone streams whichever camera you pick — every lens, with zoom — into a window on the Mac. |
 
 ### The one thing Android won't allow
 
@@ -82,7 +101,10 @@ flowchart LR
         CM["ConnectionManager<br/>discovery, auth, reconnect"]
         FILES["FileBrowserModel<br/>listings, transfers"]
         MIRROR["MirrorSession<br/>H.264 → display layer"]
+        AUDIO["AudioPlayer<br/>PCM → AVAudioEngine"]
+        CAM["CameraSession<br/>camera window"]
         CLIP1["ClipboardSync<br/>NSPasteboard polling"]
+        NOTIF["NotificationMirror<br/>macOS Notification Center"]
     end
 
     subgraph PHONE["Android app — Kotlin"]
@@ -90,33 +112,48 @@ flowchart LR
         NSD["NsdAdvertiser<br/>_ecosys._tcp"]
         FS["FileService<br/>listing + transfers"]
         ENC["MirrorEncoder<br/>MediaProjection → H.264"]
+        AS["AudioStreamer<br/>playback capture → PCM"]
+        CAMS["CameraStreamer<br/>Camera2 → H.264"]
         A11Y["Accessibility service<br/>input + clipboard"]
+        RELAY["NotificationRelay<br/>notification listener"]
     end
 
     MENU --> CM
     CM --> FILES
     CM --> MIRROR
+    MIRROR --> AUDIO
+    CM --> CAM
     CM --> CLIP1
+    CM --> NOTIF
     CM <-->|"TLS: control connection<br/>JSON messages"| SVC
     FILES <-->|"TLS: stream connections<br/>file bytes"| SVC
-    MIRROR <-->|"TLS: stream connection<br/>H.264 frames"| SVC
+    MIRROR <-->|"TLS: streams<br/>H.264 + PCM audio"| SVC
+    CAM <-->|"TLS: stream<br/>H.264 frames"| SVC
     SVC --> FS
     SVC --> ENC
+    SVC --> AS
+    SVC --> CAMS
     SVC --> A11Y
+    SVC --> RELAY
     NSD -.->|"announces on LAN"| CM
 ```
+
+The phone talks to **every paired Mac at once**: each connected Mac gets its own
+session, notifications and clipboard changes are broadcast to all of them, and each
+Mac holds its own shared secret, so removing one never affects another.
 
 ### Two kinds of connection
 
 Everything runs over TLS on a port the phone picks at random and publishes via mDNS.
 
-- **Control connection** — one per session, long-lived. Carries JSON messages framed
-  as `[4-byte length][JSON]`: hello, auth, clipboard, ring, file listings, mirror
-  start/stop, and all input events.
-- **Stream connections** — short-lived, one per transfer or video stream. Opened by
-  the Mac, identified by a one-time token issued on the control connection, then
-  switched to binary frames: `[length][type][timestamp][payload]`. This keeps a 500 MB
-  download or a video stream from starving the control channel.
+- **Control connection** — one per Mac, long-lived. Carries JSON messages framed
+  as `[4-byte length][JSON]`: hello, auth, clipboard, ring, notifications, file
+  listings, mirror start/stop, and all input events.
+- **Stream connections** — one per transfer or media stream. Opened by the Mac,
+  identified by a one-time token issued on the control connection, then switched to
+  binary frames: `[length][type][timestamp][payload]`. File bytes, mirror video,
+  mirror audio (raw PCM) and camera video each get their own stream, so a 500 MB
+  download or a video stream never starves the control channel.
 
 ### Connecting, step by step
 
@@ -128,7 +165,14 @@ sequenceDiagram
     M->>P: TLS connect, pinning the phone's certificate
     M->>P: hello with name, version and capabilities
     P->>M: hello with name, version and capabilities
-    alt not paired yet
+    alt pairing by QR
+        Note over M: shows a QR code holding a fresh random nonce
+        Note over P: scans it, derives the secret from the nonce<br/>and its own certificate, stores it
+        P->>M: auth.challenge on the next connection
+        Note over M: derives the same secret from its nonce and<br/>the certificate it sees in the TLS handshake
+        M->>P: auth.response
+        P->>M: auth.ok
+    else pairing by 6-digit code
         M->>P: pair.request carrying a random nonce
         P->>M: pair.accept
         Note over M,P: both derive the same 6-digit code<br/>from the nonce and the phone's certificate
@@ -143,7 +187,8 @@ sequenceDiagram
     Note over M,P: features unlocked, ping every 10s keeps it alive
 ```
 
-Until `auth.ok`, the phone refuses every message except the handshake itself.
+Until `auth.ok`, the phone refuses every message except the handshake itself. A Mac it
+doesn't recognise gets a `pair_required` error and no session.
 
 ### Security model
 
@@ -151,20 +196,27 @@ Until `auth.ok`, the phone refuses every message except the handshake itself.
 |---|---|
 | Eavesdropping | TLS on every connection, control and streams alike. |
 | Impersonating the phone | The Mac pins the phone's exact certificate at pairing; a different certificate is refused. |
-| Impersonating the Mac | The Mac proves possession of the shared secret with an HMAC challenge-response on every connection. There is no TLS client certificate — that required a macOS keychain, which prompted for a password on every rebuild. |
-| Man-in-the-middle during pairing | The six-digit code covers both the pairing nonce and the phone's certificate, so a relay produces different numbers on the two screens. |
-| Secrets at rest | Phone: app-private storage. Mac: `~/Library/Application Support/Ecosystem/`, mode 0600. No keychain. |
+| Impersonating the Mac | Each Mac proves possession of its own shared secret with an HMAC challenge-response on every connection. There is no TLS client certificate — that required a macOS keychain, which prompted for a password on every rebuild. |
+| Man-in-the-middle during pairing | 6-digit route: the code covers both the pairing nonce and the phone's certificate, so a relay produces different numbers on the two screens. QR route: the secret is derived from the certificate seen in the TLS handshake, so a relay derives a different secret and fails authentication. |
+| Someone photographing the QR code | The code expires after five minutes, works once, and is only shown when you open the pairing window. |
+| Secrets at rest | Phone: app-private storage, one secret per Mac. Mac: `~/Library/Application Support/Ecosystem/`, mode 0600. No keychain. |
 
 ### Staying connected
 
-Wi-Fi drops, sleep, and going out of range all break the link, and macOS's network
-browser dies silently when the network changes. Three mechanisms bring it back:
+Wi-Fi drops, sleep, reboots and going out of range all break the link, and macOS's
+network browser dies silently when the network changes. On the Mac:
 
 1. The browser restarts on failure, on wake from sleep, and on a 15-second watchdog.
 2. Failed dials retry with backoff and rotate between discovered addresses, because a
    stale record can linger in caches after the phone app restarts.
-3. The phone re-announces itself whenever the network changes, and only ever runs one
-   server socket, so its port never changes underneath the Mac.
+
+On the phone:
+
+3. It re-announces itself whenever the network changes, and only ever runs one server
+   socket, so its port never changes underneath the Mac.
+4. A boot receiver starts the service after every reboot and app update, and the
+   system's early binding of the notification listener acts as a backup trigger — so
+   the connection comes back without anyone opening the app.
 
 ### Feature internals
 
@@ -175,6 +227,18 @@ and the exemption stock Android grants accessibility services doesn't apply. The
 workaround: the accessibility service watches for the system "Copied" bubble, then
 flashes an invisible 1×1 focusable window, which makes the app briefly the focused app
 and the read legal. Both sides suppress echoes by hashing content.
+
+**Notifications.** A `NotificationListenerService` forwards each notification's app
+name, title, text and button list; the Mac shows it through macOS's own Notification
+Center, so it looks and behaves like any Mac notification. Buttons are pressed
+remotely by index; buttons that accept inline reply carry the Mac-typed text in a
+`RemoteInput`. Filtering keeps the noise down: group summaries, media players,
+progress bars, silent channels and other apps' ongoing notifications stay on the
+phone, and re-posts that change nothing are dropped (apps re-post constantly; the
+phone only buzzes once, so the Mac only banners once). Incoming calls are the one
+exception to the no-ongoing rule — they pass through by their `call` category, which
+is what makes Answer and Decline work from the Mac. After an answer, the accessibility
+service taps the in-call Speaker button, best-effort.
 
 **Files.** The phone exposes `/storage/emulated/0`, canonicalising every path and
 rejecting anything that escapes that root. Listings and thumbnails (JPEG, base64) come
@@ -188,7 +252,25 @@ join at any point. The Mac rebuilds them into sample buffers and hands them to a
 `AVSampleBufferDisplayLayer`. Android 14+ allows only one capture per consent, so
 closing the window doesn't tear the capture down — it stays warm for ten minutes, and
 re-opening reattaches instantly with a forced keyframe. That's why you only approve
-once.
+once per boot.
+
+**Mirroring audio.** While mirroring, the Mac attaches a second stream and the phone
+captures its own playback (`AudioPlaybackCapture`, riding the same MediaProjection
+consent) as raw 48 kHz stereo PCM in 20 ms frames — raw on purpose: ~1.5 Mbps is
+noise next to the 8 Mbps video, and it removes an encoder and a decoder that could
+each fail. The Mac plays it through `AVAudioEngine`, dropping backlog past ~300 ms so
+a Wi-Fi hiccup can't leave the sound permanently behind the picture. The phone mutes
+its own media stream while the capture runs (capture taps the mix before the volume
+stage) and unmutes on every exit path. Android files playback capture under the
+`RECORD_AUDIO` permission, so that grant is needed even though the mic is never read.
+
+**Camera.** Camera2 streams whichever lens you pick straight into the same hardware
+H.264 encoder the mirror uses. The lens list isn't hardcoded: the phone reads its own
+camera characteristics, hides Android's synthetic duplicates, and derives the zoom
+presets (0.6×, 1×, 3×…) from each lens's real field of view — so it adapts to any
+phone. Making the feed appear as a selectable webcam in Zoom/Meet needs a macOS
+system extension that requires a paid Apple developer account; until then it's a
+viewing window.
 
 **Remote control.** Clicks, drags and keystrokes become normalised 0–1 coordinates —
 resolution- and rotation-independent — that the accessibility service replays as
@@ -203,12 +285,13 @@ tracks the content from there.
 ```
 mac-app/Ecosystem/
   Core/          protocol codec, framing, pairing, discovery, connections
-  Features/      clipboard, file browser, mirroring, streams
-  UI/            menu bar, file browser window, mirror window
+  Features/      clipboard, file browser, mirroring + audio, camera, notifications
+  UI/            menu bar, file browser, mirror, camera, pairing windows
 android-app/app/src/main/kotlin/com/akram/ecosystem/
   core/          protocol codec, framing, pairing, identity, TLS server
-  service/       the always-on foreground service
-  features/      clipboard, ring, screen encoder
+  service/       the always-on foreground service + boot receiver
+  features/      clipboard, ring, screen encoder, audio capture, camera
+  notifications/ the notification listener/relay
   accessibility/ input injection and clipboard reading
   ui/            status screen and permission prompts
 docs/            these documents, plus protocol.md (the exact wire format)

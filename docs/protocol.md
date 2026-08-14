@@ -115,7 +115,32 @@ States: `idle → requested → codeDisplayed → confirmedLocal → paired | fa
    is closed so the next one runs authenticated.
 6. Any party may send `pair.abort { reason? }` at any point → state `failed`.
 
-### 5.1 Per-connection authentication
+### 5.1 Pairing by QR code
+
+The preferred first-time method; it needs no new message types. The Mac displays a QR
+code containing
+
+```
+ecosystem://pair?d=<mac deviceId>&n=<32-byte nonce, hex>&name=<percent-encoded name>
+```
+
+The phone scans it and immediately derives and stores the shared secret
+`HKDF-SHA256(ikm = nonce, salt = phoneCertDER, info = "ecosystem-auth-v1")`, using its
+own certificate. When the Mac next connects, the phone sends the usual
+`auth.challenge`; the Mac, holding a fresh scan offer (they expire after 5 minutes and
+are single-use), derives the same secret from its nonce and the certificate it saw in
+the TLS handshake, answers, and pins the certificate. Neither the secret nor anything
+derived from it crosses the network. A relay attacker presents a different certificate,
+derives a different secret, and fails authentication.
+
+### 5.2 Multiple Macs
+
+The phone stores one secret per Mac, keyed by the Mac's `deviceId` (sent in `hello`).
+Each Mac pairs independently, connects concurrently, and can be removed independently
+— removal closes that Mac's session at once. A connecting Mac the phone has no secret
+for receives `error { code: "pair_required" }` and no session.
+
+### 5.3 Per-connection authentication
 
 Once paired, the phone challenges every new control connection and refuses all other
 message types until it succeeds.
