@@ -48,11 +48,5 @@ struct EcosystemApp: App {
                 .environment(appState)
         }
         .defaultSize(width: 720, height: 460)
-
-        Window("Phone Screen", id: "phone-mirror") {
-            MirrorWindow(session: manager.mirror)
-                .environment(appState)
-        }
-        .defaultSize(width: 320, height: 660)
     }
 }

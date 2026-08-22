@@ -42,10 +42,6 @@ struct MenuContent: View {
                 MenuRow(icon: "folder", title: "Browse phone files…", enabled: ready) {
                     open(window: "phone-files")
                 }
-                MenuRow(icon: "rectangle.on.rectangle", title: "Mirror phone screen…",
-                        enabled: ready) {
-                    open(window: "phone-mirror") { manager.mirror.start() }
-                }
                 MenuRow(icon: "camera", title: "Use phone camera…", enabled: ready) {
                     open(window: "phone-camera") { manager.camera.start() }
                 }

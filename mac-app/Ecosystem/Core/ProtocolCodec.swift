@@ -58,13 +58,6 @@ enum ProtocolCodec {
         case .fsTransferResult(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsThumb(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .fsThumbData(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
-        case .mirrorStart(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
-        case .mirrorStarted(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
-        case .inputTap(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
-        case .inputSwipe(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
-        case .inputKey(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
-        case .inputText(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
-        case .inputScroll(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .cameraStart(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .cameraStarted(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .cameraCameras(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
@@ -77,7 +70,7 @@ enum ProtocolCodec {
         case .notifyDismiss(let p): body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString, payload: p)
         case .ping, .pong, .pairAccept, .pairReject, .pairConfirm,
              .ringStart, .ringStop, .ringStopped, .unknown,
-             .mirrorNeedsConsent, .mirrorStop, .authOK, .cameraStop, .cameraList:
+             .authOK, .cameraStop, .cameraList:
             body = try encodeBody(id: id, replyTo: replyTo, type: message.typeString,
                                   payload: nil as NoPayload?)
         }
@@ -138,15 +131,6 @@ enum ProtocolCodec {
         case "fs.transferResult": message = .fsTransferResult(try payload(from: data, type: header.type))
         case "fs.thumb": message = .fsThumb(try payload(from: data, type: header.type))
         case "fs.thumbData": message = .fsThumbData(try payload(from: data, type: header.type))
-        case "mirror.start": message = .mirrorStart(try payload(from: data, type: header.type))
-        case "mirror.needsConsent": message = .mirrorNeedsConsent
-        case "mirror.started": message = .mirrorStarted(try payload(from: data, type: header.type))
-        case "mirror.stop": message = .mirrorStop
-        case "input.tap": message = .inputTap(try payload(from: data, type: header.type))
-        case "input.swipe": message = .inputSwipe(try payload(from: data, type: header.type))
-        case "input.key": message = .inputKey(try payload(from: data, type: header.type))
-        case "input.text": message = .inputText(try payload(from: data, type: header.type))
-        case "input.scroll": message = .inputScroll(try payload(from: data, type: header.type))
         case "camera.start": message = .cameraStart(try payload(from: data, type: header.type))
         case "camera.started": message = .cameraStarted(try payload(from: data, type: header.type))
         case "camera.list": message = .cameraList

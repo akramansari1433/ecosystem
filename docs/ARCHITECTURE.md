@@ -9,9 +9,8 @@ This explains the system twice: first in plain language, then in technical detai
 Ecosystem makes your Android phone and your Mac behave like one set of devices, the
 way an iPhone does with a Mac. Copy on one, paste on the other. See the phone's
 notifications on the Mac and reply from there. Answer calls from the Mac. Browse the
-phone's photos in a window. See and control the phone's screen — sound included —
-from the Mac's keyboard and trackpad. Make the phone ring when it's lost down the
-sofa.
+phone's photos in a window. Look through the phone's cameras from the Mac. Make the
+phone ring when it's lost down the sofa.
 
 **Everything happens directly between the two devices over your own Wi-Fi.** Nothing
 is uploaded, no account is needed, no company's server is involved. If your internet
@@ -75,18 +74,16 @@ switching networks, waking from sleep.
 | **Calls** | An incoming call is just a notification with Answer and Decline buttons, so those work from the Mac like any other button. After Answer, the phone flips itself to speakerphone. (The voice itself stays on the phone — Android only lets the manufacturer's own apps touch call audio.) |
 | **Ring** | The Mac says "ring"; the phone plays its alarm sound at full volume, even on silent. |
 | **Files** | The Mac asks "what's in this folder?" and gets a list back. Downloading opens a second, separate connection just for that file's bytes, so a big video doesn't block everything else. |
-| **Screen mirroring** | The phone compresses its screen into video (the same H.264 format as a video file) and streams it. Your clicks and keystrokes travel back the other way as instructions like "tap here" or "type this". |
-| **Mirroring sound** | Whatever the phone is playing is captured and streamed to the Mac alongside the video, and the phone mutes its own speaker while that's happening — the sound follows the Mac. Apps with DRM (Netflix and friends) opt out; their sound stays on the phone. |
-| **Camera** | The phone streams whichever camera you pick — every lens, with zoom — into a window on the Mac. |
+| **Camera** | The phone streams whichever camera you pick — every lens, with zoom — as compressed video (the same H.264 format as a video file) into a window on the Mac. |
 
-### The one thing Android won't allow
+### Why there is no screen mirroring
 
-The phone's screen must stay **on** while mirroring. Android deliberately blocks
-normal apps from recording a screen that's switched off — only tools with
-developer-level privileges over USB can do that. Ecosystem works with the limit rather
-than around it: it wakes the phone when you start mirroring, keeps it awake for the
-session, and offers a **Dim phone** button so the screen is nearly black and uses
-little battery while you work from the Mac.
+There used to be — video, sound, full remote control from the Mac's keyboard and
+trackpad. It was removed on purpose. Android blocks normal apps from recording a
+switched-off screen and demands a consent tap after every reboot, so mirroring could
+never feel like iPhone Mirroring — the phone had to lie there switched on with its
+screen glowing. A feature that almost works reads as broken, so it came out; the
+whole implementation is one commit away in git history if you want to resurrect it.
 
 ---
 
@@ -100,9 +97,7 @@ flowchart LR
         MENU["MenuBarExtra<br/>status + actions"]
         CM["ConnectionManager<br/>discovery, auth, reconnect"]
         FILES["FileBrowserModel<br/>listings, transfers"]
-        MIRROR["MirrorSession<br/>H.264 → display layer"]
-        AUDIO["AudioPlayer<br/>PCM → AVAudioEngine"]
-        CAM["CameraSession<br/>camera window"]
+        CAM["CameraSession<br/>H.264 → camera window"]
         CLIP1["ClipboardSync<br/>NSPasteboard polling"]
         NOTIF["NotificationMirror<br/>macOS Notification Center"]
     end
@@ -111,27 +106,20 @@ flowchart LR
         SVC["ConnectionService<br/>foreground service"]
         NSD["NsdAdvertiser<br/>_ecosys._tcp"]
         FS["FileService<br/>listing + transfers"]
-        ENC["MirrorEncoder<br/>MediaProjection → H.264"]
-        AS["AudioStreamer<br/>playback capture → PCM"]
         CAMS["CameraStreamer<br/>Camera2 → H.264"]
-        A11Y["Accessibility service<br/>input + clipboard"]
+        A11Y["Accessibility service<br/>clipboard + call speaker"]
         RELAY["NotificationRelay<br/>notification listener"]
     end
 
     MENU --> CM
     CM --> FILES
-    CM --> MIRROR
-    MIRROR --> AUDIO
     CM --> CAM
     CM --> CLIP1
     CM --> NOTIF
     CM <-->|"TLS: control connection<br/>JSON messages"| SVC
     FILES <-->|"TLS: stream connections<br/>file bytes"| SVC
-    MIRROR <-->|"TLS: streams<br/>H.264 + PCM audio"| SVC
     CAM <-->|"TLS: stream<br/>H.264 frames"| SVC
     SVC --> FS
-    SVC --> ENC
-    SVC --> AS
     SVC --> CAMS
     SVC --> A11Y
     SVC --> RELAY
@@ -147,13 +135,13 @@ Mac holds its own shared secret, so removing one never affects another.
 Everything runs over TLS on a port the phone picks at random and publishes via mDNS.
 
 - **Control connection** — one per Mac, long-lived. Carries JSON messages framed
-  as `[4-byte length][JSON]`: hello, auth, clipboard, ring, notifications, file
-  listings, mirror start/stop, and all input events.
-- **Stream connections** — one per transfer or media stream. Opened by the Mac,
+  as `[4-byte length][JSON]`: hello, auth, clipboard, ring, notifications, and file
+  listings.
+- **Stream connections** — one per transfer or video stream. Opened by the Mac,
   identified by a one-time token issued on the control connection, then switched to
-  binary frames: `[length][type][timestamp][payload]`. File bytes, mirror video,
-  mirror audio (raw PCM) and camera video each get their own stream, so a 500 MB
-  download or a video stream never starves the control channel.
+  binary frames: `[length][type][timestamp][payload]`. File bytes and camera video
+  each get their own stream, so a 500 MB download or a video stream never starves
+  the control channel.
 
 ### Connecting, step by step
 
@@ -246,53 +234,29 @@ back on the control connection; file bytes move over a stream connection in 256 
 chunks with a SHA-256 checksum verified at the far end. Image and video filters run a
 recursive sweep on the phone rather than filtering one folder on the Mac.
 
-**Mirroring.** MediaProjection feeds a hardware H.264 encoder; frames go out as
-Annex-B, with the codec configuration re-sent before every keyframe so the Mac can
-join at any point. The Mac rebuilds them into sample buffers and hands them to an
-`AVSampleBufferDisplayLayer`. Android 14+ allows only one capture per consent, so
-closing the window doesn't tear the capture down — it stays warm for ten minutes, and
-re-opening reattaches instantly with a forced keyframe. That's why you only approve
-once per boot.
-
-**Mirroring audio.** While mirroring, the Mac attaches a second stream and the phone
-captures its own playback (`AudioPlaybackCapture`, riding the same MediaProjection
-consent) as raw 48 kHz stereo PCM in 20 ms frames — raw on purpose: ~1.5 Mbps is
-noise next to the 8 Mbps video, and it removes an encoder and a decoder that could
-each fail. The Mac plays it through `AVAudioEngine`, dropping backlog past ~300 ms so
-a Wi-Fi hiccup can't leave the sound permanently behind the picture. The phone mutes
-its own media stream while the capture runs (capture taps the mix before the volume
-stage) and unmutes on every exit path. Android files playback capture under the
-`RECORD_AUDIO` permission, so that grant is needed even though the mic is never read.
-
-**Camera.** Camera2 streams whichever lens you pick straight into the same hardware
-H.264 encoder the mirror uses. The lens list isn't hardcoded: the phone reads its own
+**Camera.** Camera2 streams whichever lens you pick into a hardware H.264 encoder;
+frames go out as Annex-B with the codec configuration re-sent before every keyframe,
+and the Mac rebuilds them into sample buffers for an `AVSampleBufferDisplayLayer`.
+The lens list isn't hardcoded: the phone reads its own
 camera characteristics, hides Android's synthetic duplicates, and derives the zoom
 presets (0.6×, 1×, 3×…) from each lens's real field of view — so it adapts to any
 phone. Making the feed appear as a selectable webcam in Zoom/Meet needs a macOS
 system extension that requires a paid Apple developer account; until then it's a
 viewing window.
 
-**Remote control.** Clicks, drags and keystrokes become normalised 0–1 coordinates —
-resolution- and rotation-independent — that the accessibility service replays as
-gestures. Trackpad scrolling is one continuous drag built from Android's continued
-strokes, rather than a series of flicks, so the phone's own fling physics apply.
-Typing pastes the first character at the cursor (an empty field reports its
-placeholder as its text, and many apps expose no way to tell the difference), then
-tracks the content from there.
-
 ### Where things live
 
 ```
 mac-app/Ecosystem/
   Core/          protocol codec, framing, pairing, discovery, connections
-  Features/      clipboard, file browser, mirroring + audio, camera, notifications
-  UI/            menu bar, file browser, mirror, camera, pairing windows
+  Features/      clipboard, file browser, camera, notifications
+  UI/            menu bar, file browser, camera, pairing windows
 android-app/app/src/main/kotlin/com/akram/ecosystem/
   core/          protocol codec, framing, pairing, identity, TLS server
   service/       the always-on foreground service + boot receiver
-  features/      clipboard, ring, screen encoder, audio capture, camera
+  features/      clipboard, ring, camera
   notifications/ the notification listener/relay
-  accessibility/ input injection and clipboard reading
+  accessibility/ clipboard reading + call speaker tap
   ui/            status screen and permission prompts
 docs/            these documents, plus protocol.md (the exact wire format)
 scripts/         build and packaging

@@ -79,18 +79,6 @@ struct FsThumbDataPayload: Codable, Equatable {
     let dataBase64: String?
 }
 
-struct MirrorStartPayload: Codable, Equatable {
-    let bitrateBps: Int
-    let maxLongEdge: Int
-}
-
-struct MirrorStartedPayload: Codable, Equatable {
-    let height: Int
-    let rotationDeg: Int
-    let token: String
-    let width: Int
-}
-
 struct CameraDeviceInfo: Codable, Equatable, Hashable, Identifiable {
     /// "back" or "front".
     let facing: String
@@ -141,35 +129,6 @@ struct AuthChallengePayload: Codable, Equatable {
 
 struct AuthResponsePayload: Codable, Equatable {
     let mac: String
-}
-
-struct InputTapPayload: Codable, Equatable {
-    let longPress: Bool
-    let x: Double
-    let y: Double
-}
-
-struct InputSwipePayload: Codable, Equatable {
-    let durationMs: Int
-    let x1: Double
-    let x2: Double
-    let y1: Double
-    let y2: Double
-}
-
-struct InputKeyPayload: Codable, Equatable {
-    let key: String
-}
-
-struct InputTextPayload: Codable, Equatable {
-    let text: String
-}
-
-struct InputScrollPayload: Codable, Equatable {
-    /// "begin", "move" or "end" — one continuous drag on the phone.
-    let phase: String
-    let x: Double
-    let y: Double
 }
 
 struct FsTransferResultPayload: Codable, Equatable {
@@ -232,15 +191,6 @@ enum Message: Equatable {
     case fsTransferResult(FsTransferResultPayload)
     case fsThumb(FsThumbPayload)
     case fsThumbData(FsThumbDataPayload)
-    case mirrorStart(MirrorStartPayload)
-    case mirrorNeedsConsent
-    case mirrorStarted(MirrorStartedPayload)
-    case mirrorStop
-    case inputTap(InputTapPayload)
-    case inputSwipe(InputSwipePayload)
-    case inputKey(InputKeyPayload)
-    case inputText(InputTextPayload)
-    case inputScroll(InputScrollPayload)
     case cameraStart(CameraStartPayload)
     case cameraStarted(CameraStartedPayload)
     case cameraList
@@ -281,15 +231,6 @@ enum Message: Equatable {
         case .fsTransferResult: "fs.transferResult"
         case .fsThumb: "fs.thumb"
         case .fsThumbData: "fs.thumbData"
-        case .mirrorStart: "mirror.start"
-        case .mirrorNeedsConsent: "mirror.needsConsent"
-        case .mirrorStarted: "mirror.started"
-        case .mirrorStop: "mirror.stop"
-        case .inputTap: "input.tap"
-        case .inputSwipe: "input.swipe"
-        case .inputKey: "input.key"
-        case .inputText: "input.text"
-        case .inputScroll: "input.scroll"
         case .cameraStart: "camera.start"
         case .cameraStarted: "camera.started"
         case .cameraList: "camera.list"

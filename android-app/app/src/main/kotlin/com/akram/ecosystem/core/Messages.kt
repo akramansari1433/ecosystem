@@ -99,22 +99,6 @@ data class FsThumbDataPayload(
 )
 
 @Serializable
-data class MirrorStartPayload(
-    val bitrateBps: Int,
-    val maxLongEdge: Int,
-)
-
-@Serializable
-data class MirrorStartedPayload(
-    val height: Int,
-    val rotationDeg: Int,
-    val token: String,
-    val width: Int,
-)
-
-// Input coordinates are normalized 0..1 relative to the screen, so they're
-// independent of resolution and rotation. See docs/protocol.md §12.
-@Serializable
 data class CameraDeviceInfo(
     /** "back" or "front". */
     val facing: String,
@@ -165,41 +149,6 @@ data class AuthChallengePayload(
 @Serializable
 data class AuthResponsePayload(
     val mac: String,
-)
-
-@Serializable
-data class InputTapPayload(
-    val longPress: Boolean = false,
-    val x: Double,
-    val y: Double,
-)
-
-@Serializable
-data class InputSwipePayload(
-    val durationMs: Int,
-    val x1: Double,
-    val x2: Double,
-    val y1: Double,
-    val y2: Double,
-)
-
-@Serializable
-data class InputScrollPayload(
-    /** "begin", "move" or "end" — one continuous drag on the phone. */
-    val phase: String,
-    val x: Double,
-    val y: Double,
-)
-
-@Serializable
-data class InputTextPayload(
-    val text: String,
-)
-
-@Serializable
-data class InputKeyPayload(
-    /** "back", "home", "recents", "power", "notifications". */
-    val key: String,
 )
 
 @Serializable
@@ -267,15 +216,6 @@ sealed interface Message {
     data class FsTransferResult(val payload: FsTransferResultPayload) : Message
     data class FsThumb(val payload: FsThumbPayload) : Message
     data class FsThumbData(val payload: FsThumbDataPayload) : Message
-    data class MirrorStart(val payload: MirrorStartPayload) : Message
-    data object MirrorNeedsConsent : Message
-    data class MirrorStarted(val payload: MirrorStartedPayload) : Message
-    data object MirrorStop : Message
-    data class InputTap(val payload: InputTapPayload) : Message
-    data class InputSwipe(val payload: InputSwipePayload) : Message
-    data class InputKey(val payload: InputKeyPayload) : Message
-    data class InputText(val payload: InputTextPayload) : Message
-    data class InputScroll(val payload: InputScrollPayload) : Message
     data class CameraStart(val payload: CameraStartPayload) : Message
     data class CameraStarted(val payload: CameraStartedPayload) : Message
     data object CameraList : Message
@@ -316,15 +256,6 @@ sealed interface Message {
             is FsTransferResult -> "fs.transferResult"
             is FsThumb -> "fs.thumb"
             is FsThumbData -> "fs.thumbData"
-            is MirrorStart -> "mirror.start"
-            MirrorNeedsConsent -> "mirror.needsConsent"
-            is MirrorStarted -> "mirror.started"
-            MirrorStop -> "mirror.stop"
-            is InputTap -> "input.tap"
-            is InputSwipe -> "input.swipe"
-            is InputKey -> "input.key"
-            is InputText -> "input.text"
-            is InputScroll -> "input.scroll"
             is CameraStart -> "camera.start"
             is CameraStarted -> "camera.started"
             CameraList -> "camera.list"

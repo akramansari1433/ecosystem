@@ -67,16 +67,6 @@ class MainActivity : ComponentActivity() {
     private val requestCamera =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    private val requestProjection =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            val service = ConnectionService.instance
-            if (result.resultCode == RESULT_OK && result.data != null) {
-                service?.setProjectionGrant(result.resultCode, result.data!!)
-            } else {
-                service?.consentDenied()
-            }
-        }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
@@ -85,30 +75,11 @@ class MainActivity : ComponentActivity() {
             requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         ConnectionService.start(this)
-        maybeLaunchProjectionConsent(intent)
         setContent {
             MaterialTheme {
                 StatusScreen(
-                    onAllowMirroring = {
-                        val manager = getSystemService(
-                            android.media.projection.MediaProjectionManager::class.java)
-                        requestProjection.launch(manager.createScreenCaptureIntent())
-                    },
                     onAllowCamera = { requestCamera.launch(Manifest.permission.CAMERA) })
             }
-        }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        maybeLaunchProjectionConsent(intent)
-    }
-
-    private fun maybeLaunchProjectionConsent(intent: Intent?) {
-        if (intent?.getBooleanExtra("requestProjection", false) == true) {
-            val manager = getSystemService(
-                android.media.projection.MediaProjectionManager::class.java)
-            requestProjection.launch(manager.createScreenCaptureIntent())
         }
     }
 
@@ -130,7 +101,6 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun StatusScreen(
-    onAllowMirroring: () -> Unit = {},
     onAllowCamera: () -> Unit = {},
 ) {
     val state by ConnectionService.state.collectAsState()
@@ -160,17 +130,6 @@ fun StatusScreen(
                 }
             }
 
-            if (state.mirrorConsentPending) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Your Mac wants to mirror this screen",
-                            fontWeight = FontWeight.SemiBold)
-                        Button(onClick = onAllowMirroring) { Text("Allow mirroring") }
-                    }
-                }
-            }
-
             if (state.cameraActive) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
@@ -192,7 +151,6 @@ fun StatusScreen(
 
             ClipboardSetupCard()
             NotificationSetupCard()
-            AudioSetupCard()
             StorageSetupCard()
 
             state.pairing?.let { pairing ->
@@ -373,43 +331,6 @@ private fun NotificationSetupCard() {
                     context.startActivity(
                         Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                 }) { Text("Open Notification access") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AudioSetupCard() {
-    val context = LocalContext.current
-    var granted by remember {
-        mutableStateOf(
-            context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED)
-    }
-    val request = androidx.activity.compose.rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()) { granted = it }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (granted) {
-                Text("Mirroring sound: on ✓", fontWeight = FontWeight.SemiBold)
-                Text(
-                    "While mirroring, whatever this phone plays comes out of " +
-                        "your Mac's speakers.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            } else {
-                Text("Hear this phone on your Mac", fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Allow microphone access and screen mirroring will carry the " +
-                        "phone's sound to the Mac. Android files \"capture what's " +
-                        "playing\" under the microphone permission — the mic itself " +
-                        "is never recorded.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Button(onClick = { request.launch(Manifest.permission.RECORD_AUDIO) }) {
-                    Text("Allow")
-                }
             }
         }
     }

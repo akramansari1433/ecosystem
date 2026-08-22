@@ -13,16 +13,13 @@
 		030AC2D7061F45B7BF960BE5 /* FileBrowserModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DAE884B9D12090ED543EE6D /* FileBrowserModel.swift */; };
 		0BC4B4AB69A107B84CD901CC /* FrameReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CF5F43399FCC116148D667 /* FrameReader.swift */; };
 		0DC24AC80033BFEC2452280D /* DeviceBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149B418FD7D5021324F0B77A /* DeviceBrowser.swift */; };
-		11A0D8EDBE5CB893349D39BF /* H264Assembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01C9702A34C121B7AA70421 /* H264Assembler.swift */; };
 		2292B4EDC9F6D39058FF944C /* StreamConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */; };
-		3900C4AE09BC67D4BFB6F13C /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5727B907FA359DDC5DA97E7B /* AudioPlayer.swift */; };
 		3A9DF5EC35CFCE329BB6835E /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = A760FAAD24D7764BF66763BD /* AppIcon.icns */; };
 		3ABC86EB39404ACC14CCB4BB /* ClipboardSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BB3230DAE77ACE2C1F815C /* ClipboardSync.swift */; };
 		472EEEB6FD9298D0887404CA /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003CE1F6634354A0762DDD21 /* AppState.swift */; };
-		598657EB28FC92DBB8022B4C /* MirrorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C5509329948F276C59FB9F /* MirrorSession.swift */; };
 		85BAF2A7EA79BCA1FD10F76B /* ConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC65AADAEA421ABDBB56F40D /* ConnectionManager.swift */; };
+		8E8AF8D44A622EABF2AC6F4E /* H264Assembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 247436D913DB9177F31AA891 /* H264Assembler.swift */; };
 		99FB15E12A450DFF0BA27FC6 /* Identity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C90C4DDE6E434D78F959671 /* Identity.swift */; };
-		A25373137800201449090B82 /* MirrorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */; };
 		A85689BE85659933A8F79C1B /* EcosystemApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F97B7789670B31B8A473C61 /* EcosystemApp.swift */; };
 		B8FF7FF56456EF460A2B6B36 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3A4DA73670F8B5D2839D0B /* FileBrowserView.swift */; };
 		C48194E7AB7A02E82FD29388 /* PairingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEFCBBACFFCC5E8341B2614 /* PairingEngine.swift */; };
@@ -41,18 +38,16 @@
 		11CF5F43399FCC116148D667 /* FrameReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameReader.swift; sourceTree = "<group>"; };
 		149B418FD7D5021324F0B77A /* DeviceBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceBrowser.swift; sourceTree = "<group>"; };
 		1EEFCBBACFFCC5E8341B2614 /* PairingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingEngine.swift; sourceTree = "<group>"; };
+		247436D913DB9177F31AA891 /* H264Assembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H264Assembler.swift; sourceTree = "<group>"; };
 		264E91AA7C2D9DDB60797974 /* MenuContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuContent.swift; sourceTree = "<group>"; };
 		36CA2A9A89AA5503D8C6828B /* CameraWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraWindow.swift; sourceTree = "<group>"; };
 		4C35F543B765A6ACDA71208A /* NotificationMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationMirror.swift; sourceTree = "<group>"; };
 		4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamConnection.swift; sourceTree = "<group>"; };
 		4F97B7789670B31B8A473C61 /* EcosystemApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EcosystemApp.swift; sourceTree = "<group>"; };
-		5727B907FA359DDC5DA97E7B /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
 		5C90C4DDE6E434D78F959671 /* Identity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identity.swift; sourceTree = "<group>"; };
-		6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorWindow.swift; sourceTree = "<group>"; };
 		684502EFA95A06C656943815 /* PairByScanWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairByScanWindow.swift; sourceTree = "<group>"; };
 		94CD0BD69396AC6E5A07D21F /* PairingCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCode.swift; sourceTree = "<group>"; };
 		9DAE884B9D12090ED543EE6D /* FileBrowserModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserModel.swift; sourceTree = "<group>"; };
-		A01C9702A34C121B7AA70421 /* H264Assembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = H264Assembler.swift; sourceTree = "<group>"; };
 		A60F7109FE591E7B23DDC88D /* ControlConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlConnection.swift; sourceTree = "<group>"; };
 		A760FAAD24D7764BF66763BD /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		A76DA50DBCAA9E450A57EB60 /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
@@ -60,7 +55,6 @@
 		B4BB3230DAE77ACE2C1F815C /* ClipboardSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSync.swift; sourceTree = "<group>"; };
 		C886575FBEC02F98C2883B81 /* ProtocolCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolCodec.swift; sourceTree = "<group>"; };
 		CB3A4DA73670F8B5D2839D0B /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
-		D1C5509329948F276C59FB9F /* MirrorSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorSession.swift; sourceTree = "<group>"; };
 		E4AA591F1984F9E8B603F527 /* Ecosystem.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ecosystem.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F04E1941B706ADDDE5DC146E /* BinaryFrames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryFrames.swift; sourceTree = "<group>"; };
 		F090A46118396020E3CD41FD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -82,20 +76,9 @@
 				4CE75A690BB5347B16EF2B8A /* StreamConnection.swift */,
 				F441B50D750BF3DEBB855218 /* Camera */,
 				030488436DC9A7FFFDB23551 /* FileBrowser */,
-				1796578CCCBB33AE96161D6C /* Mirroring */,
 				98CA5F473F630291D0D4E200 /* Notifications */,
 			);
 			path = Features;
-			sourceTree = "<group>";
-		};
-		1796578CCCBB33AE96161D6C /* Mirroring */ = {
-			isa = PBXGroup;
-			children = (
-				5727B907FA359DDC5DA97E7B /* AudioPlayer.swift */,
-				A01C9702A34C121B7AA70421 /* H264Assembler.swift */,
-				D1C5509329948F276C59FB9F /* MirrorSession.swift */,
-			);
-			path = Mirroring;
 			sourceTree = "<group>";
 		};
 		28FED88F042C8E56D23CD239 /* UI */ = {
@@ -104,7 +87,6 @@
 				36CA2A9A89AA5503D8C6828B /* CameraWindow.swift */,
 				CB3A4DA73670F8B5D2839D0B /* FileBrowserView.swift */,
 				264E91AA7C2D9DDB60797974 /* MenuContent.swift */,
-				6066F4DA3A6A2932223646D9 /* MirrorWindow.swift */,
 				684502EFA95A06C656943815 /* PairByScanWindow.swift */,
 			);
 			path = UI;
@@ -169,6 +151,7 @@
 			isa = PBXGroup;
 			children = (
 				03E9476F42A9905DCD349E31 /* CameraSession.swift */,
+				247436D913DB9177F31AA891 /* H264Assembler.swift */,
 			);
 			path = Camera;
 			sourceTree = "<group>";
@@ -244,7 +227,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				472EEEB6FD9298D0887404CA /* AppState.swift in Sources */,
-				3900C4AE09BC67D4BFB6F13C /* AudioPlayer.swift in Sources */,
 				E343F3D4B7D06BF2A83473B7 /* BinaryFrames.swift in Sources */,
 				D7F9384856882A254138465A /* CameraSession.swift in Sources */,
 				D519C5C2FAC068D519D69598 /* CameraWindow.swift in Sources */,
@@ -256,12 +238,10 @@
 				030AC2D7061F45B7BF960BE5 /* FileBrowserModel.swift in Sources */,
 				B8FF7FF56456EF460A2B6B36 /* FileBrowserView.swift in Sources */,
 				0BC4B4AB69A107B84CD901CC /* FrameReader.swift in Sources */,
-				11A0D8EDBE5CB893349D39BF /* H264Assembler.swift in Sources */,
+				8E8AF8D44A622EABF2AC6F4E /* H264Assembler.swift in Sources */,
 				99FB15E12A450DFF0BA27FC6 /* Identity.swift in Sources */,
 				F22EB9E21BB925A6858F3B7B /* MenuContent.swift in Sources */,
 				01CEE3F51B1892D9FF6270CC /* Messages.swift in Sources */,
-				598657EB28FC92DBB8022B4C /* MirrorSession.swift in Sources */,
-				A25373137800201449090B82 /* MirrorWindow.swift in Sources */,
 				D96845443B234DD04E1E0DE7 /* NotificationMirror.swift in Sources */,
 				D81E17440607E11E365D9049 /* PairByScanWindow.swift in Sources */,
 				E2D2780193FF0DD8FF8573A5 /* PairingCode.swift in Sources */,

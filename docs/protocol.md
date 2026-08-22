@@ -92,8 +92,7 @@ replies nothing and switches to binary framing).
 
 - `protocolVersion`: integer, currently `2`. On mismatch, send
   `error { code: "version_mismatch" }` and close.
-- `capabilities`: strings from `["clipboard","ring","fs","mirror","input"]`. The phone
-  advertises `input` only while its accessibility service is connected.
+- `capabilities`: strings from `["clipboard","ring","fs","camera"]`.
 - Dead peer: no frame for 30 s → close and (Mac) reconnect with backoff.
 
 ## 5. Pairing (TOFU + verification code)
@@ -203,33 +202,12 @@ message types until it succeeds.
 
 | type | payload |
 |---|---|
-| `stream.attach` | `{ token, kind: "file" \| "mirror" \| "camera" \| "audio" }` |
+| `stream.attach` | `{ token, kind: "file" \| "camera" }` |
 
-`token`: opaque string issued by the phone in `fs.transferReady` / `mirror.started` /
-`camera.started`. Unknown or reused token → close connection.
+`token`: opaque string issued by the phone in `fs.transferReady` / `camera.started`.
+Unknown or reused token → close connection.
 
-## 10. Mirroring (M3)
-
-| type | direction | payload |
-|---|---|---|
-| `mirror.start` | Mac → phone | `{ maxLongEdge, bitrateBps }` |
-| `mirror.needsConsent` | reply | — (phone surfaces the MediaProjection dialog) |
-| `mirror.started` | reply | `{ token, width, height, rotationDeg }` |
-| `mirror.stop` | both | — |
-
-Video flows on a stream connection (`kind: "mirror"`): frameType 0 config, then 1/2
-frames. Phone resends config before every keyframe.
-
-While mirroring, the Mac may attach a second stream with the same token and
-`kind: "audio"`. The phone answers with frameType 5 chunks: raw PCM, 48 kHz,
-stereo, 16-bit little-endian, ~20 ms each — whatever the phone is playing
-(apps can opt out of capture; cellular call audio is never available). The
-stream needs the phone's one-time microphone grant; without it the phone
-keeps the connection silent. While the audio stream is attached the phone
-mutes its own media output — the sound follows the Mac, iPhone-style — and
-restores it when the stream ends.
-
-## 11. Notifications
+## 10. Notifications
 
 The phone mirrors its notification shade to every connected Mac (needs the
 one-time "Notification access" grant on the phone). Buttons — including
@@ -243,19 +221,7 @@ buttons carry the Mac-typed text.
 | `notify.action` | Mac → phone | `{ key, action, reply? }` — `action` is an index into `actions`; `reply` is inline-reply text |
 | `notify.dismiss` | Mac → phone | `{ key }` (the user dismissed the Mac's copy) |
 
-## 12. Input
-
-Coordinates are normalized 0…1 with the origin at the screen's top-left, so they are
-independent of resolution and rotation. Requires the phone's accessibility service.
-
-| type | direction | payload |
-|---|---|---|
-| `input.tap` | Mac → phone | `{ x, y, longPress }` |
-| `input.swipe` | Mac → phone | `{ x1, y1, x2, y2, durationMs }` |
-| `input.text` | Mac → phone | `{ text }` (typed into the focused field) |
-| `input.key` | Mac → phone | `{ key }`: `back`, `home`, `recents`, `notifications`, `lock`, `enter`, `backspace`, `dim.on`, `dim.off` |
-
-## 13. Camera (M4, planned)
+## 11. Camera
 
 | type | direction | payload |
 |---|---|---|
@@ -264,7 +230,8 @@ independent of resolution and rotation. Requires the phone's accessibility servi
 | `camera.switchLens` | Mac → phone | `{ lens }` |
 | `camera.stop` | both | — |
 
-Same stream framing as mirroring (`kind: "camera"`).
+Video flows on a stream connection (`kind: "camera"`): frameType 0 config, then 1/2
+frames, config resent before every keyframe.
 
 ## Versioning
 

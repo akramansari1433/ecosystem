@@ -130,10 +130,9 @@ you just lose that feature:
 | Permission | What it unlocks |
 |---|---|
 | **Notifications** | Required — Android insists on a visible notification for an app that stays connected in the background. |
-| **Accessibility** ("Ecosystem clipboard sync") | Copying *from* the phone to the Mac, and all remote control: tapping, swiping, typing, Back/Home/Recents. |
+| **Accessibility** ("Ecosystem clipboard sync") | Copying *from* the phone to the Mac, and the auto-speakerphone when you answer a call from the Mac. |
 | **Notification access** | Your phone's notifications on the Mac — including replying, and answering or declining calls from there. |
 | **All files access** | Browsing the phone's files from the Mac. |
-| **Microphone** | The phone's *sound* on the Mac while mirroring. Android files "capture what's playing" under the microphone permission — the mic itself is never recorded. |
 | **Camera** | Viewing through the phone's cameras from the Mac. |
 
 Then stop Samsung from shutting the app down while the phone is idle:
@@ -190,8 +189,8 @@ cd android-app && ./gradlew installDebug
 ```
 
 Heads-up: whenever the phone app is reinstalled, One UI silently switches off the
-**Accessibility** service (and sometimes **Notification access**). If clipboard,
-remote control, or Mac notifications stop after an update, flip those two back on.
+**Accessibility** service (and sometimes **Notification access**). If phone→Mac
+clipboard or Mac notifications stop after an update, flip those two back on.
 
 ---
 
@@ -200,9 +199,8 @@ remote control, or Mac notifications stop after an update, flip those two back o
 | What you see | What it means |
 |---|---|
 | The Mac never finds the phone | Usually the Local Network permission. System Settings → Privacy & Security → Local Network → switch Ecosystem on. Also check both devices are on the same Wi-Fi, not a guest network. |
-| Tapping and typing in the mirror window do nothing | Android switched the Accessibility service off, which it does whenever the app is reinstalled. The mirror window shows an orange banner when this happens. Fix: Settings → Accessibility → Ecosystem clipboard sync → off, then on. |
+| Phone→Mac clipboard stopped working | Android switched the Accessibility service off, which it does whenever the app is reinstalled. Fix: Settings → Accessibility → Ecosystem clipboard sync → off, then on. |
 | Phone notifications stopped appearing on the Mac | Same reinstall quirk, other permission: Settings → Notifications → Advanced settings → Notification access → Ecosystem on. Also check macOS allows Ecosystem notifications (System Settings → Notifications). |
-| Mirroring has a picture but no sound | The Microphone permission card in the phone app, or the app playing is DRM-protected (Netflix etc. opt out of capture — that's their choice, not fixable). |
 | It disconnects when the phone has been idle | Samsung's battery manager. Apply the two battery settings in step 5. |
 | It doesn't reconnect after the phone restarts | The app starts itself on boot, but only if Samsung hasn't restricted it — same two battery settings in step 5. |
 | macOS says the app "cannot be opened" | Expected on first launch — right-click the app → Open. |

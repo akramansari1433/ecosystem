@@ -5,8 +5,7 @@ Wi-Fi, with no cloud, no account, and no cable.
 
 Copy on one device and paste on the other. See the phone's notifications on the Mac
 and reply from there. Answer or decline calls from the Mac. Browse the phone's photos
-and files in a window. Mirror the phone's screen — with its sound playing through the
-Mac — and control it with your Mac's trackpad and keyboard. Ring the phone when it's
+and files in a window. Use the phone's cameras from the Mac. Ring the phone when it's
 lost in the sofa.
 
 Everything happens directly between the two devices on your local network. Nothing is
@@ -24,8 +23,6 @@ uploaded anywhere, ever.
 | Answer or decline phone calls from the Mac | ✅ |
 | Ring my phone — loud even on silent | ✅ |
 | Browse, download and upload phone files, with previews and drag-out | ✅ |
-| Mirror the phone's screen, with the phone's audio on the Mac | ✅ |
-| Control the phone: tap, swipe, scroll, type, Back/Home/Recents, volume | ✅ |
 | See through the phone's cameras in a window, all lenses | ✅ |
 | Phone camera as a webcam in Zoom/Meet/FaceTime | planned |
 
@@ -41,14 +38,10 @@ Honesty section. These aren't bugs — they're walls Android and macOS put up:
   lets the manufacturer's own system apps touch call audio. You can answer/decline
   from the Mac, and the phone flips to speakerphone, but the voice goes through the
   phone.
-- **Mirroring while the phone's screen is off.** Android blocks apps from recording a
-  switched-off screen. The **Dim phone** button gets you most of the way: the phone
-  stays on but nearly black.
-- **Sound from DRM-protected apps.** Netflix and friends opt out of audio capture;
-  their picture mirrors, their sound stays on the phone. YouTube, Spotify and games
-  come through fine.
-- **One "allow" tap after each phone reboot** before the first mirror session —
-  Android requires it.
+- **Screen mirroring.** It was built — video, audio, full remote control — and then
+  removed. Android can't capture a switched-off screen or skip the per-boot consent
+  tap, so it could never feel like iPhone Mirroring, and a half-version isn't worth
+  its complexity. The code lives in git history if you want it back.
 
 ## Install
 

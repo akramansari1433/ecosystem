@@ -72,7 +72,6 @@ class ConnectionService : Service() {
         /** Every Mac this phone is paired with, connected or not. */
         val pairedMacs: List<PairedPeers.Peer> = emptyList(),
         val pairing: PairingUi? = null,
-        val mirrorConsentPending: Boolean = false,
         val cameraPermissionNeeded: Boolean = false,
         val cameraActive: Boolean = false,
     )
@@ -83,19 +82,10 @@ class ConnectionService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val RING_CHANNEL_ID = "ecosystem.ring"
         private const val RING_NOTIFICATION_ID = 2
-        private const val CONSENT_NOTIFICATION_ID = 3
-        /** Keep capture warm this long after the Mac closes, for instant re-open. */
-        private const val MIRROR_IDLE_TIMEOUT_MS = 10 * 60 * 1000L
         private const val ACTION_STOP_RING = "com.akram.ecosystem.STOP_RING"
         const val PROTOCOL_VERSION = 2
 
-        /** "input" appears only while the accessibility service is actually
-         *  connected, so the Mac can tell the user when control is unavailable. */
-        val capabilities: List<String>
-            get() = buildList {
-                addAll(listOf("clipboard", "ring", "fs", "mirror", "camera"))
-                if (com.akram.ecosystem.accessibility.RemoteInput.isAvailable) add("input")
-            }
+        val capabilities: List<String> = listOf("clipboard", "ring", "fs", "camera")
 
         private val _state = MutableStateFlow(UiState())
         val state: StateFlow<UiState> = _state
@@ -150,7 +140,6 @@ class ConnectionService : Service() {
     override fun onBind(intent: Intent?) = null
 
     override fun onDestroy() {
-        setMediaMuted(false)
         instance = null
         advertiser.unregister()
         multicastLock?.release()
@@ -363,8 +352,6 @@ class ConnectionService : Service() {
             is Message.FsUpload -> handleFsUpload(session, envelope.id, m.payload)
             is Message.FsTransferResult ->
                 Log.i(TAG, "transfer ${m.payload.token}: ok=${m.payload.ok}")
-            is Message.MirrorStart -> handleMirrorStart(session, envelope.id, m.payload)
-            Message.MirrorStop -> pauseMirroring()
             is Message.CameraStart -> handleCameraStart(session, envelope.id, m.payload)
             Message.CameraList -> session.send(
                 Message.CameraCameras(com.akram.ecosystem.core.CameraListPayload(
@@ -372,35 +359,6 @@ class ConnectionService : Service() {
                 replyTo = envelope.id)
             is Message.CameraZoom -> cameraStreamer?.setZoom(m.payload.ratio)
             Message.CameraStop -> stopCamera()
-            is Message.InputTap -> {
-                val (w, h) = screenSize()
-                com.akram.ecosystem.accessibility.RemoteInput.tap(
-                    (m.payload.x * w).toFloat(), (m.payload.y * h).toFloat(),
-                    m.payload.longPress)
-            }
-            is Message.InputSwipe -> {
-                val (w, h) = screenSize()
-                com.akram.ecosystem.accessibility.RemoteInput.swipe(
-                    (m.payload.x1 * w).toFloat(), (m.payload.y1 * h).toFloat(),
-                    (m.payload.x2 * w).toFloat(), (m.payload.y2 * h).toFloat(),
-                    m.payload.durationMs.toLong())
-            }
-            is Message.InputKey -> when (m.payload.key) {
-                "dim.on" -> com.akram.ecosystem.accessibility.RemoteInput.setDimmed(true)
-                "dim.off" -> com.akram.ecosystem.accessibility.RemoteInput.setDimmed(false)
-                "volume.up" -> adjustVolume(AudioManager.ADJUST_RAISE)
-                "volume.down" -> adjustVolume(AudioManager.ADJUST_LOWER)
-                "volume.mute" -> adjustVolume(AudioManager.ADJUST_TOGGLE_MUTE)
-                else ->
-                    com.akram.ecosystem.accessibility.RemoteInput.globalAction(m.payload.key)
-            }
-            is Message.InputText ->
-                com.akram.ecosystem.accessibility.RemoteInput.typeText(m.payload.text)
-            is Message.InputScroll -> {
-                val (w, h) = screenSize()
-                com.akram.ecosystem.accessibility.RemoteInput.scroll(
-                    m.payload.phase, (m.payload.x * w).toFloat(), (m.payload.y * h).toFloat())
-            }
             is Message.NotifyAction ->
                 com.akram.ecosystem.notifications.NotificationRelay.instance
                     ?.performAction(m.payload.key, m.payload.action, m.payload.reply)
@@ -522,27 +480,13 @@ class ConnectionService : Service() {
             }
     }
 
-    /** Routes an attached stream connection by kind (file transfer / mirror). */
+    /** Routes an attached stream connection by kind (file transfer / camera). */
     private fun runStream(socket: SSLSocket, reader: FrameReader, attach: StreamAttachPayload) {
         try {
             // Video streams are one-way: the Mac sends nothing once attached, so
             // the control connection's 35s read timeout would end them mid-session.
-            if (attach.kind != "file") socket.soTimeout = 0
+            if (attach.kind == "camera") socket.soTimeout = 0
             when (attach.kind) {
-                "mirror" -> {
-                    if (attach.token == mirrorToken) {
-                        runMirrorStream(socket)
-                    } else {
-                        Log.w(TAG, "unknown mirror token")
-                    }
-                }
-                "audio" -> {
-                    if (attach.token == mirrorToken) {
-                        runAudioStream(socket)
-                    } else {
-                        Log.w(TAG, "unknown audio token")
-                    }
-                }
                 "camera" -> {
                     if (attach.token == cameraToken) {
                         runCameraStream(socket)
@@ -737,11 +681,6 @@ class ConnectionService : Service() {
         com.akram.ecosystem.features.ClipboardHandler(this)
     }
 
-    /** Marks text as already-seen so our own clipboard writes are not echoed. */
-    fun suppressClipboard(text: String) {
-        clipboardHandler.markSent(text)
-    }
-
     /** Sends [text] to every connected Mac. False when none, or it is a repeat. */
     fun sendLocalClipboard(text: String): Boolean {
         if (sessions.values.none { it.authenticated }) {
@@ -801,273 +740,6 @@ class ConnectionService : Service() {
                 .setOngoing(true)
                 .addAction(Notification.Action.Builder(null, "Stop", stop).build())
                 .build())
-    }
-
-    /** Media volume, with the phone's own volume panel shown as feedback. */
-    private fun adjustVolume(direction: Int) {
-        getSystemService(AudioManager::class.java).adjustStreamVolume(
-            AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI)
-    }
-
-    /** Current screen size in pixels; input arrives normalized to it. */
-    private fun screenSize(): Pair<Int, Int> {
-        val bounds = getSystemService(android.view.WindowManager::class.java)
-            .maximumWindowMetrics.bounds
-        return bounds.width() to bounds.height()
-    }
-
-    // MARK: mirroring
-
-    /** One-shot consent grant handed over by MainActivity. */
-    @Volatile
-    private var projectionGrant: Pair<Int, Intent>? = null
-
-    /** Kept alive between sessions so mirroring only needs approving once. */
-    @Volatile
-    private var liveProjection: android.media.projection.MediaProjection? = null
-    private var mirrorEncoder: com.akram.ecosystem.features.MirrorEncoder? = null
-    private var mirrorToken: String? = null
-    private var mirrorWidth = 0
-    private var mirrorHeight = 0
-    private var idleMirrorJob: kotlinx.coroutines.Job? = null
-    private var pendingMirrorFrames = ArrayDeque<Triple<Int, Long, ByteArray>>()
-    @Volatile
-    private var mirrorSocket: SSLSocket? = null
-    private val mirrorWriteLock = Any()
-
-    @Volatile
-    private var consentPromptShown = false
-
-    fun setProjectionGrant(resultCode: Int, data: Intent) {
-        projectionGrant = resultCode to data
-        consentPromptShown = false
-        getSystemService(NotificationManager::class.java).cancel(CONSENT_NOTIFICATION_ID)
-        _state.value = _state.value.copy(mirrorConsentPending = false)
-        Log.i(TAG, "projection consent granted")
-    }
-
-    fun consentDenied() {
-        consentPromptShown = false
-        getSystemService(NotificationManager::class.java).cancel(CONSENT_NOTIFICATION_ID)
-        _state.value = _state.value.copy(mirrorConsentPending = false)
-    }
-
-    private fun handleMirrorStart(
-        session: Session,
-        requestId: String,
-        payload: com.akram.ecosystem.core.MirrorStartPayload,
-    ) {
-        val grant = projectionGrant
-        if (grant == null && liveProjection == null) {
-            _state.value = _state.value.copy(mirrorConsentPending = true)
-            // The Mac polls every 2 s while waiting; prompt the user only once.
-            if (!consentPromptShown) {
-                consentPromptShown = true
-                showConsentNotification()
-                runCatching {
-                    startActivity(
-                        Intent(this, com.akram.ecosystem.ui.MainActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
-                                Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            .putExtra("requestProjection", true))
-                }
-            }
-            session.send(Message.MirrorNeedsConsent, replyTo = requestId)
-            return
-        }
-        consentPromptShown = false
-        // Android 14+ allows only ONE capture per consent, so a running session
-        // is reused rather than rebuilt — that is what makes mirroring instant
-        // on the second and later opens.
-        wakeScreenForMirroring()
-        mirrorEncoder?.takeIf { it.isRunning }?.let { encoder ->
-            val token = UUID.randomUUID().toString()
-            mirrorToken = token
-            detachMirrorStream()
-            encoder.cachedConfig()?.let {
-                emitMirrorFrame(BinaryFrames.TYPE_CODEC_CONFIG, 0, it)
-            }
-            encoder.requestKeyframe()
-            sendMessage(Message.MirrorStarted(
-                com.akram.ecosystem.core.MirrorStartedPayload(
-                    height = mirrorHeight, rotationDeg = 0,
-                    token = token, width = mirrorWidth)),
-                replyTo = requestId)
-            Log.i(TAG, "reusing live capture session")
-            return
-        }
-        try {
-            // API 34+: the service must be foregrounded with the mediaProjection
-            // type BEFORE getMediaProjection, and a callback registered before
-            // createVirtualDisplay.
-            startForeground(
-                NOTIFICATION_ID, buildNotification("Mirroring to your Mac"),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-            // Reuse a live projection so the user only approves once; Android
-            // consent tokens are single-use, but the projection itself can drive
-            // any number of capture sessions until it is stopped or revoked.
-            val projection = liveProjection ?: run {
-                val grantValue = grant ?: throw IllegalStateException("no consent")
-                projectionGrant = null
-                val manager = getSystemService(
-                    android.media.projection.MediaProjectionManager::class.java)
-                val fresh = manager.getMediaProjection(grantValue.first, grantValue.second)
-                    ?: throw IllegalStateException("projection unavailable")
-                fresh.registerCallback(object :
-                    android.media.projection.MediaProjection.Callback() {
-                    override fun onStop() {
-                        Log.i(TAG, "projection revoked")
-                        liveProjection = null
-                        stopMirroring()
-                    }
-                }, android.os.Handler(android.os.Looper.getMainLooper()))
-                liveProjection = fresh
-                fresh
-            }
-
-            val bounds = getSystemService(android.view.WindowManager::class.java)
-                .maximumWindowMetrics.bounds
-            val scale = payload.maxLongEdge.toFloat() /
-                maxOf(bounds.width(), bounds.height()).toFloat()
-            // Round to even (H.264 needs even dimensions) rather than flooring to
-            // a multiple of 16 — that distorted the aspect ratio, and Android
-            // letterboxed the mismatch into the frame as black bars.
-            fun even(value: Float) = (Math.round(value / 2f) * 2).coerceAtLeast(2)
-            val w = even(bounds.width() * scale)
-            val h = even(bounds.height() * scale)
-            val token = UUID.randomUUID().toString()
-            mirrorToken = token
-            mirrorWidth = w
-            mirrorHeight = h
-            pendingMirrorFrames.clear()
-            mirrorEncoder = com.akram.ecosystem.features.MirrorEncoder(
-                projection, w, h, payload.bitrateBps,
-                resources.displayMetrics.densityDpi,
-                sink = { type, pts, data -> emitMirrorFrame(type, pts, data) })
-            mirrorEncoder?.start()
-            sendMessage(Message.MirrorStarted(
-                com.akram.ecosystem.core.MirrorStartedPayload(
-                    height = h, rotationDeg = 0, token = token, width = w)),
-                replyTo = requestId)
-        } catch (t: Throwable) {
-            Log.e(TAG, "mirror start failed", t)
-            stopMirroring()
-            sendMessage(Message.Error(ErrorPayload("mirror_error", t.message)),
-                replyTo = requestId)
-        }
-    }
-
-    /** Encoder frames: buffer until the Mac's stream socket attaches, then write. */
-    private fun emitMirrorFrame(type: Int, pts: Long, data: ByteArray) {
-        val socket = mirrorSocket
-        if (socket == null) {
-            synchronized(pendingMirrorFrames) {
-                // Keep only the newest config + latest frames while waiting.
-                if (pendingMirrorFrames.size > 120) pendingMirrorFrames.clear()
-                pendingMirrorFrames += Triple(type, pts, data)
-            }
-            return
-        }
-        try {
-            synchronized(mirrorWriteLock) {
-                socket.outputStream.write(BinaryFrames.encode(type, pts, data))
-            }
-        } catch (t: Throwable) {
-            Log.w(TAG, "mirror socket write failed: $t")
-            stopMirroring()
-        }
-    }
-
-    /**
-     * Streams the phone's playback audio (48 kHz stereo s16le PCM, TYPE_AUDIO
-     * frames) alongside the mirror video, for as long as the Mac keeps the
-     * connection open. Missing RECORD_AUDIO just means silent mirroring.
-     */
-    private fun runAudioStream(socket: SSLSocket) {
-        val projection = liveProjection ?: run {
-            Log.w(TAG, "audio attach without live projection"); return
-        }
-        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
-            android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "audio attach without RECORD_AUDIO; mirroring stays silent")
-            return
-        }
-        Log.i(TAG, "audio stream attached")
-        val writeLock = Any()
-        val streamer = com.akram.ecosystem.features.AudioStreamer(projection) { pts, pcm ->
-            try {
-                synchronized(writeLock) {
-                    socket.outputStream.write(
-                        BinaryFrames.encode(BinaryFrames.TYPE_AUDIO, pts, pcm))
-                }
-            } catch (t: Throwable) {
-                runCatching { socket.close() }
-            }
-        }
-        audioStreamer?.stop()
-        audioStreamer = streamer
-        try {
-            streamer.start()
-        } catch (t: Throwable) {
-            Log.w(TAG, "audio capture failed: $t")
-            return
-        }
-        // The sound now belongs to the Mac, like iPhone Mirroring: capture taps
-        // the mix before the volume stage, so muting the phone's media output
-        // silences only the phone. Restored the moment the stream ends.
-        setMediaMuted(true)
-        // Block until the Mac closes the stream, then release the recorder.
-        runCatching { while (socket.inputStream.read() >= 0) Unit }
-        setMediaMuted(false)
-        streamer.stop()
-        if (audioStreamer === streamer) audioStreamer = null
-        Log.i(TAG, "audio stream detached")
-    }
-
-    private fun setMediaMuted(muted: Boolean) {
-        runCatching {
-            getSystemService(AudioManager::class.java).adjustStreamVolume(
-                AudioManager.STREAM_MUSIC,
-                if (muted) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE, 0)
-        }.onFailure { Log.w(TAG, "media mute($muted) failed: $it") }
-    }
-
-    private var audioStreamer: com.akram.ecosystem.features.AudioStreamer? = null
-
-    private fun runMirrorStream(socket: SSLSocket) {
-        Log.i(TAG, "mirror stream attached")
-        synchronized(pendingMirrorFrames) {
-            for ((type, pts, data) in pendingMirrorFrames) {
-                runCatching {
-                    socket.outputStream.write(BinaryFrames.encode(type, pts, data))
-                }
-            }
-            pendingMirrorFrames.clear()
-            mirrorSocket = socket
-        }
-        // Block until the Mac closes the stream (its way of ending the session).
-        runCatching { while (socket.inputStream.read() >= 0) Unit }
-        if (mirrorSocket === socket) {
-            mirrorSocket = null
-            pauseMirroring()
-        }
-    }
-
-    /**
-     * Capture only yields frames while the display is awake (Android gives no
-     * app-level way to record a powered-off screen), so wake it and hold it on
-     * for the session.
-     */
-    private fun wakeScreenForMirroring() {
-        val power = getSystemService(android.os.PowerManager::class.java)
-        if (!power.isInteractive) {
-            runCatching {
-                startActivity(Intent(this, com.akram.ecosystem.ui.WakeActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
-        }
-        com.akram.ecosystem.accessibility.RemoteInput.setKeepAwake(true)
     }
 
     // MARK: camera
@@ -1224,68 +896,6 @@ class ConnectionService : Service() {
                     ?: "Waiting for your Mac…"),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         }
-    }
-
-    /** Detaches the viewer but leaves capture running for an instant re-open. */
-    private fun detachMirrorStream() {
-        runCatching { mirrorSocket?.close() }
-        mirrorSocket = null
-        synchronized(pendingMirrorFrames) { pendingMirrorFrames.clear() }
-    }
-
-    /**
-     * Called when the Mac closes the window. Capture stays alive (reused on the
-     * next open, no consent dialog) until it has been idle for a while.
-     */
-    private fun pauseMirroring() {
-        detachMirrorStream()
-        mirrorToken = null
-        idleMirrorJob?.cancel()
-        idleMirrorJob = scope.launch {
-            kotlinx.coroutines.delay(MIRROR_IDLE_TIMEOUT_MS)
-            if (mirrorSocket == null) {
-                Log.i(TAG, "mirror idle; releasing capture")
-                stopMirroring()
-            }
-        }
-    }
-
-    private fun stopMirroring() {
-        idleMirrorJob?.cancel()
-        audioStreamer?.stop()
-        audioStreamer = null
-        setMediaMuted(false)
-        com.akram.ecosystem.accessibility.RemoteInput.setKeepAwake(false)
-        detachMirrorStream()
-        mirrorEncoder?.stop()
-        mirrorEncoder = null
-        mirrorToken = null
-        runCatching { liveProjection?.stop() }
-        liveProjection = null
-        startForeground(
-            NOTIFICATION_ID,
-            buildNotification(_state.value.peerName?.let { "Connected to $it" }
-                ?: "Waiting for your Mac…"),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-    }
-
-    private fun showConsentNotification() {
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(
-            "ecosystem.consent", "Mirroring requests", NotificationManager.IMPORTANCE_HIGH))
-        val open = PendingIntent.getActivity(
-            this, 2,
-            Intent(this, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra("requestProjection", true),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        nm.notify(CONSENT_NOTIFICATION_ID, Notification.Builder(this, "ecosystem.consent")
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("Allow screen mirroring?")
-            .setContentText("Your Mac wants to view this phone's screen. Tap to allow.")
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .build())
     }
 
     // MARK: outbound

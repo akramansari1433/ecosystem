@@ -12,7 +12,6 @@ struct BinaryFrame: Equatable {
 enum BinaryFrames {
     static let typeCodecConfig: UInt8 = 0
     static let typeKeyframe: UInt8 = 1
-    static let typeAudio: UInt8 = 5
     static let typeDelta: UInt8 = 2
     static let typeFileChunk: UInt8 = 3
     static let typeEnd: UInt8 = 4

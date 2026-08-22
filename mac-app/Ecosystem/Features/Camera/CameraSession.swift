@@ -5,8 +5,8 @@ import os
 
 private let log = Logger(subsystem: "com.akram.ecosystem", category: "camera")
 
-/// Streams the phone's camera to the Mac. Shares the H.264 assembly used by
-/// screen mirroring; the difference is the source and the lens control.
+/// Streams the phone's camera to the Mac as H.264, reassembled by
+/// H264Assembler into sample buffers for display.
 @MainActor
 @Observable
 final class CameraSession {

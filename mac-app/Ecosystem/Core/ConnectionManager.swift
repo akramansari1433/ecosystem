@@ -34,7 +34,6 @@ final class ConnectionManager {
     private let notifications = NotificationMirror()
     private var pendingReplies: [String: CheckedContinuation<InboundEnvelope, Error>] = [:]
     private(set) lazy var files = FileBrowserModel(manager: self)
-    private(set) lazy var mirror = MirrorSession(manager: self)
     private(set) lazy var camera = CameraSession(manager: self)
 
     enum RequestError: LocalizedError {
@@ -171,7 +170,7 @@ final class ConnectionManager {
             reconnectAttempt = 0
             isReadyForRequests = false
             try? await conn.send(.hello(HelloPayload(
-                capabilities: ["clipboard", "ring", "fs", "mirror", "input"],
+                capabilities: ["clipboard", "ring", "fs", "camera"],
                 deviceId: Self.deviceId,
                 name: Host.current().localizedName ?? "Mac",
                 protocolVersion: 2)))
@@ -245,7 +244,6 @@ final class ConnectionManager {
                 return
             }
             appState.phoneName = hello.name
-            appState.inputAvailable = hello.capabilities.contains("input")
             if PairingStore.isPaired {
                 appState.status = .connected(hello.name)   // confirmed once auth.ok lands
             } else {
