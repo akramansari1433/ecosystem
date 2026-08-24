@@ -17,7 +17,7 @@ uploaded anywhere, ever.
 |---|---|
 | Finds your phone and connects on its own — even after a phone restart | ✅ |
 | Pair by scanning a QR code (or comparing a 6-digit code) | ✅ |
-| Works with more than one Mac | ✅ |
+| Works with more than one Mac — and ignores other people's phones | ✅ |
 | Clipboard sync, both directions, automatic | ✅ |
 | Phone notifications on the Mac — reply, act, dismiss from there | ✅ |
 | Answer or decline phone calls from the Mac | ✅ |

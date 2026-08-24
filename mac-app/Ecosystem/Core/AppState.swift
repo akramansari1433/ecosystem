@@ -18,7 +18,13 @@ final class AppState {
     var paired = false
     var connected = false
     var phoneName: String?
-    var discoveredPhone: String?
+    struct FoundPhone: Identifiable, Equatable {
+        let id: String
+        let name: String
+    }
+    /// Every Ecosystem phone advertising on this network right now.
+    var discoveredPhones: [FoundPhone] = []
+    var discoveredPhone: String? { discoveredPhones.first?.name }
     var pairingCode: String?
     var ringing = false
     /// False when the phone's accessibility service is off, so taps/typing

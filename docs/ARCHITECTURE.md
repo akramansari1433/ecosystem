@@ -26,6 +26,10 @@ on the same Wi-Fi.
 The phone app also starts itself: after a reboot, and after being updated. You never
 have to open it for the connection to come back.
 
+Several people running Ecosystem on the same Wi-Fi is fine. A Mac that hasn't
+paired yet lists every phone it finds and asks which one is yours; a paired Mac
+remembers its phone's identity and never dials anyone else's.
+
 ### How they know it's really you
 
 The first time, you pair — once per Mac, and a phone can be paired with several Macs.

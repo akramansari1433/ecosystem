@@ -22,6 +22,22 @@ struct PairingStore {
         directory.appendingPathComponent("pair-secret.bin")
     }
 
+    private static var phoneIdURL: URL {
+        directory.appendingPathComponent("phone-id")
+    }
+
+    /// The paired phone's deviceId (from its hello), so discovery can tell our
+    /// phone apart from someone else's on the same Wi-Fi. Nil on
+    /// pairings made before this existed; the next successful auth fills it in.
+    static var phoneDeviceId: String? {
+        (try? String(contentsOf: phoneIdURL, encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func savePhoneDeviceId(_ id: String) {
+        try? id.write(to: phoneIdURL, atomically: true, encoding: .utf8)
+    }
+
     static var pinnedPeerCertificate: Data? {
         try? Data(contentsOf: peerCertURL)
     }
@@ -66,6 +82,7 @@ struct PairingStore {
     static func clear() {
         try? FileManager.default.removeItem(at: peerCertURL)
         try? FileManager.default.removeItem(at: secretURL)
+        try? FileManager.default.removeItem(at: phoneIdURL)
     }
 
     static func deriveSecret(nonce: Data, peerCertificate: Data) -> SymmetricKey {

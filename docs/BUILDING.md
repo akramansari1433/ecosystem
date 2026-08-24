@@ -167,6 +167,10 @@ on both.
 From then on the two find each other automatically whenever they're on the same
 Wi-Fi: nothing to open, nothing to re-approve.
 
+**Someone else on your Wi-Fi also uses Ecosystem?** No problem — if the Mac sees
+more than one phone, its menu lists them and asks which one is yours. Once paired,
+a Mac only ever talks to its own phone.
+
 **More than one Mac?** Repeat the same pairing on each Mac. The phone lists every
 paired Mac and can remove any of them; the Mac's menu has **Forget this phone** (the
 small phone-with-a-slash icon next to Quit).

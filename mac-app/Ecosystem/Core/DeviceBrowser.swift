@@ -9,8 +9,12 @@ private let log = Logger(subsystem: "com.akram.ecosystem", category: "browser")
 final class DeviceBrowser {
     struct Device: Equatable {
         let name: String
+        /// From the service's TXT record; identifies the phone across renames.
+        let deviceId: String?
         let endpoint: NWEndpoint
-        static func == (lhs: Device, rhs: Device) -> Bool { lhs.name == rhs.name }
+        static func == (lhs: Device, rhs: Device) -> Bool {
+            lhs.name == rhs.name && lhs.deviceId == rhs.deviceId
+        }
     }
 
     var onDevicesChanged: (([Device]) -> Void)?
@@ -22,7 +26,7 @@ final class DeviceBrowser {
         browser?.stateUpdateHandler = nil   // its cancel must not look like a failure
         stop()
         let browser = NWBrowser(
-            for: .bonjour(type: "_ecosys._tcp", domain: nil), using: .init())
+            for: .bonjourWithTXTRecord(type: "_ecosys._tcp", domain: nil), using: .init())
         browser.stateUpdateHandler = { [weak self] state in
             log.info("browser state: \(String(describing: state), privacy: .public)")
             // Only a genuine failure warrants a restart. `.cancelled` is what our
@@ -38,7 +42,11 @@ final class DeviceBrowser {
             let devices = results.compactMap { result -> Device? in
                 guard case .service(let name, _, _, _) = result.endpoint else { return nil }
                 let display = name.replacingOccurrences(of: "Ecosystem-", with: "")
-                return Device(name: display, endpoint: result.endpoint)
+                var deviceId: String?
+                if case .bonjour(let txt) = result.metadata {
+                    deviceId = txt["deviceId"]
+                }
+                return Device(name: display, deviceId: deviceId, endpoint: result.endpoint)
             }
             Task { @MainActor [weak self] in
                 self?.onDevicesChanged?(devices)

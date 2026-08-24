@@ -27,6 +27,22 @@ struct MenuContent: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
+            } else if !appState.paired && appState.discoveredPhones.count > 1 {
+                // Several phones on this Wi-Fi run Ecosystem; don't guess.
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Several phones found — which is yours?")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 9)
+                        .padding(.bottom, 2)
+                    ForEach(appState.discoveredPhones) { phone in
+                        MenuRow(icon: "iphone.gen3", title: phone.name) {
+                            manager.selectPhone(id: phone.id)
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
             }
 
             Divider()
@@ -158,7 +174,10 @@ struct MenuContent: View {
     }
 
     private var deviceTitle: String {
-        appState.phoneName ?? appState.discoveredPhone ?? "No phone found"
+        if let name = appState.phoneName { return name }
+        let found = appState.discoveredPhones
+        if found.count > 1 { return "\(found.count) phones found" }
+        return found.first?.name ?? "No phone found"
     }
 
     private var statusSubtitle: String {
@@ -166,7 +185,9 @@ struct MenuContent: View {
         case .connected: "Connected"
         case .searching: appState.paired
             ? "Looking for your phone…"
-            : "Open Ecosystem on your phone to pair"
+            : (appState.discoveredPhones.count > 1
+                ? "Pick your phone below to pair"
+                : "Open Ecosystem on your phone to pair")
         case .foundUnpaired: "Found — not paired yet"
         case .pairing: "Pairing…"
         case .error(let message): message

@@ -25,6 +25,10 @@ final class ConnectionManager {
     private var currentPeerDER: Data?
     private var devices: [DeviceBrowser.Device] = []
     private var deviceRotation = 0
+    /// Unpaired only: the phone the user picked when several are advertising.
+    private var selectedPhoneId: String?
+    /// The connected phone's deviceId, from its hello.
+    private var currentPeerId: String?
     private var reconnectAttempt = 0
     private var connectTask: Task<Void, Never>?
     private var activeDevice: DeviceBrowser.Device?
@@ -101,9 +105,9 @@ final class ConnectionManager {
         guard connection == nil else { return }
         if devices.isEmpty {
             restartBrowser(reason: "no devices seen")
-        } else if connectTask == nil {
+        } else if connectTask == nil, let device = preferredDevice() {
             log.info("watchdog: retrying connection")
-            connect(to: devices[deviceRotation % devices.count])
+            connect(to: device)
         }
     }
 
@@ -133,9 +137,39 @@ final class ConnectionManager {
 
     private func devicesChanged(_ found: [DeviceBrowser.Device]) {
         devices = found
-        appState.discoveredPhone = found.first?.name
-        guard let device = found.first else { return }
-        if connection == nil && connectTask == nil {
+        appState.discoveredPhones = found.map {
+            .init(id: $0.deviceId ?? $0.name, name: $0.name)
+        }
+        guard connection == nil && connectTask == nil,
+              let device = preferredDevice() else { return }
+        connect(to: device)
+    }
+
+    /// The phone this Mac should be talking to, out of everything advertising.
+    /// More than one phone on a network is normal — flatmates, offices — and
+    /// dialling someone else's phone just harvests pair_required errors.
+    private func preferredDevice() -> DeviceBrowser.Device? {
+        if let pairedId = PairingStore.phoneDeviceId {
+            // Paired: only our own phone, never a neighbour's.
+            return devices.first { $0.deviceId == pairedId }
+        }
+        if PairingStore.isPaired {
+            // Paired before phone ids were stored: rotate as before; the first
+            // successful auth records the id and ends the guessing.
+            return devices.isEmpty ? nil : devices[deviceRotation % devices.count]
+        }
+        if let chosen = selectedPhoneId {
+            return devices.first { $0.deviceId == chosen || $0.name == chosen }
+        }
+        // Unpaired with several candidates: wait for the user to pick one.
+        return devices.count == 1 ? devices.first : nil
+    }
+
+    /// Unpaired, several phones advertising: the user picked which one is theirs.
+    func selectPhone(id: String) {
+        selectedPhoneId = id
+        Task { await connection?.close() }
+        if connection == nil, connectTask == nil, let device = preferredDevice() {
             connect(to: device)
         }
     }
@@ -244,6 +278,7 @@ final class ConnectionManager {
                 return
             }
             appState.phoneName = hello.name
+            currentPeerId = hello.deviceId
             if PairingStore.isPaired {
                 appState.status = .connected(hello.name)   // confirmed once auth.ok lands
             } else {
@@ -282,6 +317,12 @@ final class ConnectionManager {
                 replyTo: envelope.id)
 
         case .authOK:
+            // Remember which phone this pairing belongs to, so discovery never
+            // again dials a different phone that happens to share the network.
+            if let id = currentPeerId, PairingStore.phoneDeviceId != id {
+                PairingStore.savePhoneDeviceId(id)
+            }
+            selectedPhoneId = nil
             PairingStore.scanOffer = nil
             isReadyForRequests = true
             appState.connected = true
@@ -438,12 +479,12 @@ final class ConnectionManager {
         reconnectAttempt += 1
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
-            guard let self, self.connection == nil, self.connectTask == nil,
-                  !self.devices.isEmpty else { return }
+            guard let self, self.connection == nil, self.connectTask == nil else { return }
             // Rotate through discovered records: a stale duplicate can linger in
             // mDNS caches after the phone app restarts.
             self.deviceRotation += 1
-            self.connect(to: self.devices[self.deviceRotation % self.devices.count])
+            guard let device = self.preferredDevice() else { return }
+            self.connect(to: device)
         }
     }
 
