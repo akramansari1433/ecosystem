@@ -220,6 +220,15 @@ workaround: the accessibility service watches for the system "Copied" bubble, th
 flashes an invisible 1×1 focusable window, which makes the app briefly the focused app
 and the read legal. Both sides suppress echoes by hashing content.
 
+**Payment apps.** Banking and UPI apps treat any enabled third-party
+accessibility service as a fraud risk and warn or refuse to run — a fair rule
+that Ecosystem triggers by existing. So it steps aside: when a known payment
+app comes to the foreground, the accessibility service disables itself, and
+comes back on its own after ten minutes or when the screen locks (programmatic
+re-enable needs `WRITE_SECURE_SETTINGS`, granted once over ADB). Clipboard
+sync is the only thing paused; notifications, files, camera and ring don't
+touch accessibility and keep working.
+
 **Notifications.** A `NotificationListenerService` forwards each notification's app
 name, title, text and button list; the Mac shows it through macOS's own Notification
 Center, so it looks and behaves like any Mac notification. Buttons are pressed

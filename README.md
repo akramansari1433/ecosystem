@@ -19,6 +19,7 @@ uploaded anywhere, ever.
 | Pair by scanning a QR code (or comparing a 6-digit code) | ✅ |
 | Works with more than one Mac — and ignores other people's phones | ✅ |
 | Clipboard sync, both directions, automatic | ✅ |
+| Steps aside for payment apps automatically (they dislike accessibility services) | ✅ |
 | Phone notifications on the Mac — reply, act, dismiss from there | ✅ |
 | Answer or decline phone calls from the Mac | ✅ |
 | Ring my phone — loud even on silent | ✅ |

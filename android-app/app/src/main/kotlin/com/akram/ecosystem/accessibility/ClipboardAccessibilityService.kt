@@ -44,6 +44,17 @@ class ClipboardAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        // Payment apps refuse to run alongside an accessibility service; step
+        // aside while one is on screen. PaymentPause brings the service back.
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString()
+            if (pkg != null && pkg != packageName && pkg != "com.android.systemui" &&
+                PaymentPause.isPaymentApp(this, pkg)
+            ) {
+                PaymentPause.pause(this, pkg)
+                return
+            }
+        }
         if (event.packageName != "com.android.systemui") return
         val kind = event.eventType
         if (kind != AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED &&

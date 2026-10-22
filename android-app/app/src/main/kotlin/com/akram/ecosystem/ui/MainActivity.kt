@@ -280,7 +280,8 @@ private fun ClipboardSetupCard() {
                 Text(
                     "Copy on either device, paste on the other. Backup options: the " +
                         "“Send clipboard to Mac” Quick Settings tile, or Share → " +
-                        "“Send to Mac”.",
+                        "“Send to Mac”. Pauses itself while you use payment or " +
+                        "banking apps, then comes back on its own.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             } else {
