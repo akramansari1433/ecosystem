@@ -130,6 +130,7 @@ class ConnectionService : Service() {
             pairedMacs = PairedPeers.all(filesDir))
         scope.launch { serverLoop() }
         watchNetwork()
+        com.akram.ecosystem.accessibility.PaymentPause.restoreAfterRestart(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

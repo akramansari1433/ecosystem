@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         isVisible = true
+        com.akram.ecosystem.accessibility.PaymentPause.resumeIfPaused(this)
         ConnectionService.instance?.onAppForeground()
     }
 

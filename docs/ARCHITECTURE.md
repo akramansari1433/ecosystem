@@ -224,8 +224,11 @@ and the read legal. Both sides suppress echoes by hashing content.
 accessibility service as a fraud risk and warn or refuse to run — a fair rule
 that Ecosystem triggers by existing. So it steps aside: when a known payment
 app comes to the foreground, the accessibility service disables itself, and
-comes back on its own after ten minutes or when the screen locks (programmatic
-re-enable needs `WRITE_SECURE_SETTINGS`, granted once over ADB). Clipboard
+comes back the moment the payment app leaves the screen — watched through
+usage stats, since the usual watcher is the paused service itself — or when
+the screen locks, Ecosystem is opened, or ten minutes pass (programmatic
+re-enable needs `WRITE_SECURE_SETTINGS` and usage access, granted once over
+ADB). Clipboard
 sync is the only thing paused; notifications, files, camera and ring don't
 touch accessibility and keep working.
 
