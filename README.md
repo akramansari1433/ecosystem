@@ -20,7 +20,7 @@ uploaded anywhere, ever.
 | Works with more than one Mac — and ignores other people's phones | ✅ |
 | Clipboard sync, both directions, automatic | ✅ |
 | Steps aside for payment apps automatically (they dislike accessibility services) | ✅ |
-| Phone notifications on the Mac — reply, act, dismiss from there | ✅ |
+| Phone notifications on the Mac — reply, act, dismiss, or silence them | ✅ |
 | Answer or decline phone calls from the Mac | ✅ |
 | Ring my phone — loud even on silent | ✅ |
 | Browse, download and upload phone files, with previews and drag-out | ✅ |

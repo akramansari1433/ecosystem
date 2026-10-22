@@ -61,6 +61,14 @@ struct MenuContent: View {
                 MenuRow(icon: "camera", title: "Use phone camera…", enabled: ready) {
                     open(window: "phone-camera") { manager.camera.start() }
                 }
+                MenuRow(
+                    icon: appState.notificationsMuted ? "bell.slash.fill" : "bell.slash",
+                    title: appState.notificationsMuted
+                        ? "Show phone notifications"
+                        : "Silence phone notifications"
+                ) {
+                    manager.setNotificationsMuted(!appState.notificationsMuted)
+                }
             }
             .padding(8)
 

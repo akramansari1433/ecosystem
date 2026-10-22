@@ -77,6 +77,7 @@ final class ConnectionManager {
         clipboard.start()
         notifications.send = { [weak self] message in self?.send(message) }
         notifications.start()
+        appState.notificationsMuted = notifications.muted
         browser.onDevicesChanged = { [weak self] devices in
             self?.devicesChanged(devices)
         }
@@ -381,6 +382,12 @@ final class ConnectionManager {
         let name = (Host.current().localizedName ?? "Mac")
             .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "Mac"
         return "ecosystem://pair?d=\(Self.deviceId)&n=\(nonce.hexString)&name=\(name)"
+    }
+
+    /// Mutes/unmutes phone notifications on this Mac only.
+    func setNotificationsMuted(_ muted: Bool) {
+        notifications.muted = muted
+        appState.notificationsMuted = muted
     }
 
     /// Forgets this phone on this Mac. The phone keeps its own record until it is

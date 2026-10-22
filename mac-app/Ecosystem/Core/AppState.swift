@@ -27,6 +27,7 @@ final class AppState {
     var discoveredPhone: String? { discoveredPhones.first?.name }
     var pairingCode: String?
     var ringing = false
+    var notificationsMuted = false
     /// False when the phone's accessibility service is off, so taps/typing
     /// would silently do nothing.
 

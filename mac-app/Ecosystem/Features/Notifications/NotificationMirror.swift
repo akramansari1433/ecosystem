@@ -10,6 +10,13 @@ final class NotificationMirror: NSObject {
     /// Wired by ConnectionManager; fire-and-forget send to the phone.
     var send: (@MainActor (Message) -> Void)?
 
+    /// Silenced from the menu: incoming notifications are simply not shown.
+    /// Dismissals and already-delivered banners keep working. Persisted, so a
+    /// silenced Mac stays silenced across restarts.
+    var muted = UserDefaults.standard.bool(forKey: "ecosystem.notificationsMuted") {
+        didSet { UserDefaults.standard.set(muted, forKey: "ecosystem.notificationsMuted") }
+    }
+
     private var started = false
     // macOS wants every category registered up front, but the phone's actions
     // differ per notification — so each live notification gets a category named
@@ -28,6 +35,7 @@ final class NotificationMirror: NSObject {
     }
 
     func handlePosted(_ p: NotifyPostedPayload) {
+        guard !muted else { return }
         start()
         let center = UNUserNotificationCenter.current()
 
