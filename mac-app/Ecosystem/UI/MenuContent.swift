@@ -61,14 +61,6 @@ struct MenuContent: View {
                 MenuRow(icon: "camera", title: "Use phone camera…", enabled: ready) {
                     open(window: "phone-camera") { manager.camera.start() }
                 }
-                MenuRow(
-                    icon: appState.notificationsMuted ? "bell.slash.fill" : "bell.slash",
-                    title: appState.notificationsMuted
-                        ? "Show phone notifications"
-                        : "Silence phone notifications"
-                ) {
-                    manager.setNotificationsMuted(!appState.notificationsMuted)
-                }
             }
             .padding(8)
 
@@ -111,6 +103,17 @@ struct MenuContent: View {
                     NSApplication.shared.terminate(nil)
                 }
                 .keyboardShortcut("q")
+
+                IconButton(
+                    icon: appState.notificationsMuted ? "bell.slash.fill" : "bell.slash",
+                    help: appState.notificationsMuted
+                        ? "Phone notifications are silenced — click to show them"
+                        : "Silence phone notifications on this Mac",
+                    tint: .primary,
+                    active: appState.notificationsMuted
+                ) {
+                    manager.setNotificationsMuted(!appState.notificationsMuted)
+                }
 
                 if appState.paired {
                     IconButton(icon: "iphone.slash", help: "Forget this phone") {
@@ -238,6 +241,10 @@ struct MenuContent: View {
 private struct IconButton: View {
     let icon: String
     let help: String
+    var tint: Color = .red
+    /// Persistent engaged state (e.g. notifications silenced): shown in orange
+    /// even without hover, so the footer reveals it at a glance.
+    var active = false
     let action: () -> Void
 
     @State private var hovering = false
@@ -247,7 +254,9 @@ private struct IconButton: View {
             Image(systemName: icon)
                 .font(.system(size: 13))
                 .frame(width: 26, height: 26)
-                .foregroundStyle(hovering ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                .foregroundStyle(active ? AnyShapeStyle(Color.orange)
+                                 : hovering ? AnyShapeStyle(tint)
+                                 : AnyShapeStyle(.secondary))
                 .background(hovering ? Color.primary.opacity(0.08) : .clear,
                             in: RoundedRectangle(cornerRadius: 6))
                 .contentShape(Rectangle())
